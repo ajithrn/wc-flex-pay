@@ -1,0 +1,72 @@
+@use "../abstracts/variables" as *;
+
+#flex_pay_product_data {
+  .options_group {
+    padding: $spacing-md;
+    border-top: 1px solid $color-border;
+  }
+}
+
+.wcfp-schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: $spacing-md 0;
+
+  th {
+    padding: $spacing-sm;
+    font-weight: $font-weight-bold;
+    text-align: left;
+    background: $color-background-light;
+  }
+
+  td {
+    padding: $spacing-sm;
+    vertical-align: middle;
+    border: 1px solid $color-border;
+  }
+
+  input[type="number"],
+  input[type="date"],
+  input[type="text"] {
+    width: 100%;
+  }
+}
+
+.wcfp-installment-number {
+  font-weight: $font-weight-bold;
+  text-align: center;
+  background: $color-background-light;
+  padding: 4px $spacing-sm;
+  border-radius: $border-radius-sm;
+}
+
+.wcfp-total {
+  margin: $spacing-md 0;
+  padding: $spacing-sm;
+  background: $color-background-light;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-sm;
+
+  .amount {
+    font-weight: $font-weight-bold;
+    color: $color-primary;
+  }
+}
+
+.wcfp-schedule-notice {
+  margin-top: $spacing-md;
+  padding: $spacing-sm;
+  background: $color-notice-warning-bg;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-sm;
+
+  p {
+    margin: $spacing-xs 0;
+  }
+}
+
+.wcfp-error {
+  color: $color-error;
+  display: none;
+  margin-top: $spacing-xs;
+}

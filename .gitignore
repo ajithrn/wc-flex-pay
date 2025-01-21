@@ -1,0 +1,9 @@
+# Dependencies
+/node_modules
+
+# Compiled CSS (optional, since we want to include the compiled CSS in the repository)
+# /assets/css/*.css
+
+# OS files
+.DS_Store
+Thumbs.db

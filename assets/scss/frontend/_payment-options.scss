@@ -1,0 +1,57 @@
+@use "../abstracts/variables" as *;
+
+.wcfp-payment-type {
+  margin: $spacing-lg 0;
+  padding: $spacing-xl;
+  background: $color-background;
+  border-radius: $border-radius-lg;
+  box-shadow: $box-shadow-md;
+  border: 1px solid $color-border;
+}
+
+.wcfp-total-price {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  text-align: center;
+  margin-bottom: $spacing-lg;
+}
+
+.wcfp-payment-options {
+  display: flex;
+  gap: $spacing-md;
+}
+
+.wcfp-payment-option {
+  flex: 1;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    padding: $spacing-md;
+    border: 1px solid $color-border;
+    border-radius: $border-radius-md;
+    cursor: pointer;
+    transition: $transition-default;
+
+    &:hover {
+      background: $color-background-light;
+    }
+  }
+
+  input[type="radio"] {
+    margin: 0;
+  }
+}
+
+.wcfp-option-label {
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+}
+
+@media (max-width: $breakpoint-tablet) {
+  .wcfp-payment-options {
+    flex-direction: column;
+  }
+}

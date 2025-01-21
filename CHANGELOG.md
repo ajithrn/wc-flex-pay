@@ -1,0 +1,24 @@
+# Changelog
+
+## [1.1.0] - 2024-01-24
+### Added
+- Initial release of WC Flex Pay
+- Flexible payment schedules for WooCommerce products
+- Custom payment schedule management in product admin
+- Payment tracking and management system
+- Email notifications for upcoming and overdue payments
+- Admin dashboard for payment schedule management
+- WooCommerce cart and checkout integration
+- SCSS-based styling system with utility classes
+- Margin and padding utility classes (m-0 through m-8, p-0 through p-8)
+- Database table for payment schedules
+- Automated email notifications system
+- Order management integration
+- Multi-language support
+- Debug logging system
+
+### Security
+- WordPress nonce verification for forms
+- Data sanitization and validation
+- Proper capability checks for admin functions
+- Direct file access prevention

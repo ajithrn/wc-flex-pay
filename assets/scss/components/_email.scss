@@ -1,0 +1,68 @@
+@use "../abstracts/variables" as *;
+
+// These styles are for reference only and will be used inline in email templates
+// for maximum email client compatibility
+
+// Layout
+$email-spacing-sm: 10px;
+$email-spacing-md: 15px;
+$email-spacing-lg: 20px;
+$email-spacing-xl: 30px;
+$email-spacing-xxl: 40px;
+
+// Colors
+$email-border-color: #ddd;
+$email-bg-light: #f8f8f8;
+$email-text-primary: #666;
+
+// Status Colors
+$email-success-bg: #f0f8ff;
+$email-success-border: #2ea2cc;
+$email-success-text: #2ea2cc;
+
+$email-warning-bg: #fff8e5;
+$email-warning-border: #ffba00;
+$email-warning-text: #94660c;
+
+$email-error-bg: #fff1f0;
+$email-error-border: #d63638;
+$email-error-text: #d63638;
+
+// Common styles used in emails
+%email-container {
+  margin-bottom: $email-spacing-xxl;
+}
+
+%email-section {
+  background: $email-bg-light;
+  border: 1px solid $email-border-color;
+  padding: $email-spacing-lg;
+  margin-bottom: $email-spacing-xl;
+}
+
+%email-heading {
+  color: $email-success-text;
+  margin: 0 0 $email-spacing-lg;
+  font-size: 18px;
+}
+
+%email-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: $email-spacing-lg;
+  
+  th, td {
+    text-align: left;
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+  }
+}
+
+%email-button {
+  display: inline-block;
+  padding: 12px 25px;
+  background: $email-success-text;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 3px;
+}

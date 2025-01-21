@@ -1,0 +1,40 @@
+// Utility classes for margin and padding
+// Values are in pixels (px)
+
+// Margin utilities
+@for $i from 0 through 8 {
+  $value: $i * 4;
+  
+  .m-#{$i} { margin: #{$value}px !important; }
+  .mt-#{$i} { margin-top: #{$value}px !important; }
+  .mb-#{$i} { margin-bottom: #{$value}px !important; }
+  .ml-#{$i} { margin-left: #{$value}px !important; }
+  .mr-#{$i} { margin-right: #{$value}px !important; }
+  .mx-#{$i} { 
+    margin-left: #{$value}px !important;
+    margin-right: #{$value}px !important;
+  }
+  .my-#{$i} {
+    margin-top: #{$value}px !important;
+    margin-bottom: #{$value}px !important;
+  }
+}
+
+// Padding utilities
+@for $i from 0 through 8 {
+  $value: $i * 4;
+  
+  .p-#{$i} { padding: #{$value}px !important; }
+  .pt-#{$i} { padding-top: #{$value}px !important; }
+  .pb-#{$i} { padding-bottom: #{$value}px !important; }
+  .pl-#{$i} { padding-left: #{$value}px !important; }
+  .pr-#{$i} { padding-right: #{$value}px !important; }
+  .px-#{$i} {
+    padding-left: #{$value}px !important;
+    padding-right: #{$value}px !important;
+  }
+  .py-#{$i} {
+    padding-top: #{$value}px !important;
+    padding-bottom: #{$value}px !important;
+  }
+}

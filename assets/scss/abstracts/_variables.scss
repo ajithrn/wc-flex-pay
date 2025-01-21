@@ -1,0 +1,63 @@
+// Colors
+$color-primary: #2271b1;
+$color-text-primary: #1a1a1a;
+$color-text-secondary: #666;
+$color-border: #e5e7eb;
+$color-background: #fff;
+$color-background-light: #f8f9fa;
+$color-error: #d63638;
+
+// Status Colors
+$color-status-pending-bg: #f8dda7;
+$color-status-pending-text: #94660c;
+$color-status-completed-bg: #c6e1c6;
+$color-status-completed-text: #5b841b;
+$color-status-overdue-bg: #eba3a3;
+$color-status-overdue-text: #761919;
+$color-status-failed-bg: #eba3a3;
+$color-status-failed-text: #761919;
+
+// Notice Colors
+$color-notice-warning-bg: #fff3cd;
+$color-notice-warning-text: #856404;
+$color-notice-warning-border: #ffeeba;
+$color-notice-info-bg: #e8f4ff;
+$color-notice-info-border: #cce5ff;
+
+// Typography
+$font-size-base: 1em;
+$font-size-sm: 0.9em;
+$font-size-md: 1em;
+$font-size-lg: 1.1em;
+$font-size-xl: 1.8em;
+$font-weight-normal: 400;
+$font-weight-medium: 500;
+$font-weight-bold: 600;
+
+// Spacing
+$spacing-xs: 5px;
+$spacing-sm: 10px;
+$spacing-md: 15px;
+$spacing-lg: 20px;
+$spacing-xl: 25px;
+$spacing-xxl: 30px;
+
+// Border Radius
+$border-radius-sm: 3px;
+$border-radius-md: 6px;
+$border-radius-lg: 8px;
+
+// Box Shadow
+$box-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+$box-shadow-md: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+// Breakpoints
+$breakpoint-tablet: 768px;
+$breakpoint-mobile: 782px;
+
+// Grid
+$grid-gap: 20px;
+$grid-min-width: 250px;
+
+// Transitions
+$transition-default: all 0.2s ease;

@@ -1,0 +1,188 @@
+@use "../abstracts/variables" as *;
+
+.wcfp-payment-schedule {
+  margin: $spacing-sm 0 $spacing-lg;
+  padding: $spacing-xl;
+  background: $color-background;
+  border-radius: $border-radius-lg;
+  box-shadow: $box-shadow-md;
+  border: 1px solid $color-border;
+}
+
+.wcfp-payment-summary {
+  display: flex;
+  gap: $spacing-lg;
+  margin-bottom: $spacing-xxl;
+}
+
+.wcfp-summary-box {
+  flex: 1;
+  padding: $spacing-lg;
+  border-radius: $border-radius-lg;
+  background: $color-background-light;
+  border: 1px solid $color-border;
+
+  &.wcfp-initial-box {
+    background: $color-notice-info-bg;
+    border-color: $color-notice-info-border;
+  }
+
+  h4 {
+    margin: 0 0 $spacing-md;
+    color: $color-primary;
+    font-size: $font-size-base;
+    font-weight: $font-weight-bold;
+  }
+
+  small {
+    display: block;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+  }
+}
+
+.wcfp-summary-content {
+  text-align: center;
+}
+
+.wcfp-amount {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  margin: $spacing-sm 0;
+}
+
+.wcfp-future-payments {
+  margin-top: $spacing-xxl;
+  padding-top: $spacing-xl;
+  border-top: 1px solid $color-border;
+
+  h4 {
+    margin: 0 0 $spacing-lg;
+    font-size: $font-size-lg;
+    color: $color-text-primary;
+  }
+}
+
+// Timeline
+.wcfp-timeline {
+  position: relative;
+  padding-left: $spacing-xxl;
+
+  &:before {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: $color-border;
+  }
+}
+
+.wcfp-timeline-item {
+  position: relative;
+  margin-bottom: $spacing-xl;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.wcfp-timeline-marker {
+  position: absolute;
+  left: -$spacing-xxl;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: $color-background;
+  border: 2px solid $color-primary;
+}
+
+.wcfp-timeline-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: $color-background-light;
+  padding: $spacing-md;
+  border-radius: $border-radius-md;
+  border: 1px solid $color-border;
+}
+
+.wcfp-timeline-date {
+  display: flex;
+  flex-direction: column;
+}
+
+.wcfp-date {
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+}
+
+.wcfp-days {
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  margin-top: $spacing-xs;
+}
+
+.wcfp-timeline-amount {
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+}
+
+// Notice Box
+.wcfp-notice-box {
+  margin-top: $spacing-xxl;
+  padding: $spacing-lg;
+  background: $color-background-light;
+  border-radius: $border-radius-lg;
+  border: 1px solid $color-border;
+
+  h4 {
+    margin: 0 0 $spacing-md;
+    color: $color-text-primary;
+    font-size: $font-size-lg;
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li {
+    display: flex;
+    align-items: center;
+    margin: $spacing-md 0;
+    color: $color-text-secondary;
+    line-height: 1.4;
+  }
+}
+
+.wcfp-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: $spacing-sm;
+  background: $color-background;
+  border-radius: 50%;
+  border: 1px solid $color-border;
+}
+
+@media (max-width: $breakpoint-tablet) {
+  .wcfp-payment-summary {
+    flex-direction: column;
+  }
+  
+  .wcfp-summary-box {
+    margin-bottom: $spacing-md;
+  }
+  
+  .wcfp-timeline-content {
+    flex-direction: column;
+    text-align: center;
+    gap: $spacing-sm;
+  }
+}

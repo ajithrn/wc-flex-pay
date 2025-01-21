@@ -1,0 +1,46 @@
+@use "../abstracts/variables" as *;
+
+// Date picker customization
+.ui-datepicker {
+  background: $color-background;
+  padding: $spacing-sm;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-md;
+  box-shadow: $box-shadow-sm;
+
+  &-header {
+    margin-bottom: $spacing-xs;
+    padding-bottom: $spacing-xs;
+    border-bottom: 1px solid $color-border;
+  }
+
+  &-prev,
+  &-next {
+    cursor: pointer;
+    padding: 0 $spacing-xs;
+  }
+
+  &-calendar {
+    th {
+      padding: 3px;
+      text-align: center;
+    }
+
+    td {
+      padding: 3px;
+      text-align: center;
+    }
+
+    .ui-state-default {
+      display: block;
+      padding: $spacing-xs;
+      text-decoration: none;
+      border-radius: $border-radius-sm;
+    }
+
+    .ui-state-active {
+      background: $color-primary;
+      color: $color-background;
+    }
+  }
+}

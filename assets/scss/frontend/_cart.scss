@@ -1,0 +1,52 @@
+@use "../abstracts/variables" as *;
+
+.wcfp-installment-notice {
+    td {
+        padding: $spacing-md;
+    }
+
+    .woocommerce-info {
+        margin: 0;
+        padding: $spacing-md;
+        border-radius: $border-radius-md;
+
+        h4 {
+            margin: 0 0 $spacing-sm;
+            font-size: $font-size-md;
+        }
+
+        ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+
+            li {
+                margin-bottom: $spacing-xs;
+                padding-left: $spacing-md;
+                position: relative;
+
+                &:before {
+                    content: "•";
+                    position: absolute;
+                    left: 0;
+                }
+
+                &:last-child {
+                    margin-bottom: 0;
+                }
+            }
+        }
+    }
+}
+
+.wcfp-cart-price {
+    &-main {
+        font-weight: $font-weight-bold;
+    }
+
+    &-info {
+        font-size: $font-size-sm;
+        color: $color-text-secondary;
+        margin-top: $spacing-xs;
+    }
+}

@@ -1,0 +1,63 @@
+@use "../abstracts/variables" as *;
+
+.wcfp-notice {
+  padding: $spacing-md $spacing-md;
+  border-radius: $border-radius-md;
+  font-size: $font-size-sm;
+  line-height: 1.4;
+
+  &-warning {
+    background: $color-notice-warning-bg;
+    color: $color-notice-warning-text;
+    border: 1px solid $color-notice-warning-border;
+  }
+
+  &-info {
+    background: $color-notice-info-bg;
+    border: 1px solid $color-notice-info-border;
+  }
+
+  p {
+    margin: $spacing-xs 0;
+  }
+}
+
+.wcfp-notice-box {
+  margin-top: $spacing-xxl;
+  padding: $spacing-lg;
+  background: $color-background-light;
+  border-radius: $border-radius-lg;
+  border: 1px solid $color-border;
+
+  h4 {
+    margin: 0 0 $spacing-md;
+    color: $color-text-primary;
+    font-size: $font-size-lg;
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li {
+    display: flex;
+    align-items: center;
+    margin: $spacing-md 0;
+    color: $color-text-secondary;
+    line-height: 1.4;
+  }
+}
+
+.wcfp-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: $spacing-sm;
+  background: $color-background;
+  border-radius: 50%;
+  border: 1px solid $color-border;
+}

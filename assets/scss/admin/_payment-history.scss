@@ -1,0 +1,136 @@
+@use "../abstracts/variables" as *;
+
+.wcfp-payment-history {
+  margin: $spacing-lg 0;
+
+  h3 {
+    margin-bottom: $spacing-lg;
+    padding-bottom: $spacing-sm;
+    border-bottom: 1px solid $color-border;
+  }
+}
+
+.payment-entry {
+  margin-bottom: $spacing-xxl;
+  padding: $spacing-lg;
+  background: $color-background;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-md;
+}
+
+.payment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-md;
+
+  h4 {
+    margin: 0;
+    font-size: $font-size-lg;
+  }
+}
+
+// Payment Status Colors
+.payment-status,
+.log-type {
+  display: inline-block;
+  padding: 3px $spacing-sm;
+  border-radius: $border-radius-sm;
+  color: $color-background;
+  font-size: $font-size-sm;
+}
+
+.payment-status {
+  &.status-pending {
+    background-color: $color-status-pending-bg;
+    color: $color-status-pending-text;
+  }
+
+  &.status-completed {
+    background-color: $color-status-completed-bg;
+    color: $color-status-completed-text;
+  }
+
+  &.status-overdue {
+    background-color: $color-status-overdue-bg;
+    color: $color-status-overdue-text;
+  }
+
+  &.status-failed {
+    background-color: $color-status-failed-bg;
+    color: $color-status-failed-text;
+  }
+}
+
+// Log Type Colors
+.log-type {
+  &.type-info {
+    background-color: $color-notice-info-bg;
+    color: $color-primary;
+  }
+
+  &.type-warning {
+    background-color: $color-notice-warning-bg;
+    color: $color-status-pending-text;
+  }
+
+  &.type-error {
+    background-color: $color-status-failed-bg;
+    color: $color-status-failed-text;
+  }
+}
+
+.payment-details {
+  margin-bottom: $spacing-lg;
+
+  p {
+    margin: $spacing-xs 0;
+  }
+}
+
+.payment-logs {
+  margin-top: $spacing-lg;
+  padding-top: $spacing-lg;
+  border-top: 1px solid $color-border;
+
+  h5 {
+    margin: 0 0 $spacing-md;
+  }
+
+  table {
+    margin: 0;
+  }
+
+  th,
+  td {
+    padding: $spacing-sm;
+  }
+}
+
+.payment-actions {
+  margin-top: $spacing-lg;
+  padding-top: $spacing-lg;
+  border-top: 1px solid $color-border;
+  text-align: right;
+}
+
+.overdue {
+  color: $color-error;
+  font-weight: $font-weight-bold;
+}
+
+@media screen and (max-width: $breakpoint-mobile) {
+  .payment-header {
+    flex-direction: column;
+    align-items: flex-start;
+
+    .payment-status {
+      margin-top: $spacing-sm;
+    }
+  }
+
+  .payment-logs table {
+    display: block;
+    overflow-x: auto;
+  }
+}

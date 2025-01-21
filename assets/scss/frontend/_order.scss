@@ -1,0 +1,78 @@
+@use "../abstracts/variables" as *;
+
+.wcfp-order-schedule {
+  margin: $spacing-lg 0;
+
+  h3 {
+    margin-bottom: $spacing-lg;
+    padding-bottom: $spacing-sm;
+    border-bottom: 1px solid $color-border;
+  }
+}
+
+.wcfp-schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: $spacing-md 0;
+
+  th {
+    background: $color-background-light;
+    padding: $spacing-sm;
+    text-align: left;
+    font-weight: $font-weight-bold;
+    border-bottom: 1px solid $color-border;
+  }
+
+  td {
+    padding: $spacing-sm;
+    border-bottom: 1px solid $color-border;
+    vertical-align: middle;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  .payment-status {
+    display: inline-block;
+    padding: 3px $spacing-sm;
+    border-radius: $border-radius-sm;
+    font-size: $font-size-sm;
+
+    &.status-pending {
+      background-color: $color-status-pending-bg;
+      color: $color-status-pending-text;
+    }
+
+    &.status-completed {
+      background-color: $color-status-completed-bg;
+      color: $color-status-completed-text;
+    }
+
+    &.status-overdue {
+      background-color: $color-status-overdue-bg;
+      color: $color-status-overdue-text;
+    }
+
+    &.status-failed {
+      background-color: $color-status-failed-bg;
+      color: $color-status-failed-text;
+    }
+  }
+
+  .overdue {
+    color: $color-error;
+    font-weight: $font-weight-bold;
+  }
+
+  .process-payment {
+    padding: $spacing-xs $spacing-sm;
+  }
+}
+
+@media screen and (max-width: $breakpoint-mobile) {
+  .wcfp-schedule-table {
+    display: block;
+    overflow-x: auto;
+  }
+}

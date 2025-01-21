@@ -1,0 +1,24 @@
+@use "../abstracts/variables" as *;
+
+.wcfp-order-payments {
+  margin: $spacing-md 0;
+}
+
+.wcfp-payment-summary {
+  margin-bottom: $spacing-lg;
+  padding: $spacing-md;
+  background: $color-background-light;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-md;
+
+  p {
+    margin: $spacing-xs 0;
+  }
+}
+
+.wcfp-payment-notes {
+  padding: $spacing-sm;
+  background: $color-background-light;
+  border-left: 4px solid $color-border;
+  margin: $spacing-xs 0;
+}
