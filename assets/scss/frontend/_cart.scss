@@ -1,52 +1,62 @@
 @use "../abstracts/variables" as *;
 
-.wcfp-installment-notice {
-    td {
-        padding: $spacing-md;
+
+// Hide sale badge for flex pay products
+.wc-block-components-sale-badge {
+  display: none !important;
+}
+
+// Cart payment details
+.wc-block-components-product-details {
+    li {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: $spacing-xs !important;
     }
 
-    .woocommerce-info {
-        margin: 0;
-        padding: $spacing-md;
-        border-radius: $border-radius-md;
+    &__name {
+        color: $color-text-secondary;
+        font-size: $font-size-md;
+        min-width: 120px;
+        padding-right: $spacing-sm;
+    }
 
-        h4 {
-            margin: 0 0 $spacing-sm;
-            font-size: $font-size-md;
-        }
+    &__value {
+        font-size: $font-size-md;
+        color: $color-text-primary;
+        font-weight: $font-weight-medium;
+    }
 
-        ul {
-            margin: 0;
-            padding: 0;
-            list-style: none;
-
-            li {
-                margin-bottom: $spacing-xs;
-                padding-left: $spacing-md;
-                position: relative;
-
-                &:before {
-                    content: "•";
-                    position: absolute;
-                    left: 0;
-                }
-
-                &:last-child {
-                    margin-bottom: 0;
-                }
-            }
+    // Payment schedule
+    &__payment-schedule {
+        .wc-block-components-product-details__value {
+            white-space: pre-line;
+            color: $color-text-secondary;
+            line-height: 1.6;
+            display: inline-block;
+            padding-top: 2px;
         }
     }
 }
 
-.wcfp-cart-price {
-    &-main {
-        font-weight: $font-weight-bold;
+// Variation list fallback
+dl.variation {
+    dt {
+        color: $color-text-secondary;
+        font-size: $font-size-md;
+        margin-bottom: 2px !important;
     }
 
-    &-info {
-        font-size: $font-size-sm;
-        color: $color-text-secondary;
-        margin-top: $spacing-xs;
+    dd {
+        margin: 0 0 8px !important;
+        font-size: $font-size-md;
+        
+        &:last-child {
+            margin-bottom: 0 !important;
+        }
+
+        p {
+            margin: 0 !important;
+        }
     }
 }

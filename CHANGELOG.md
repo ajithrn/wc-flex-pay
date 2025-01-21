@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1] - 2024-01-25
+### Changed
+- Improved payment schedule display in cart
+- Enhanced readability of payment dates and amounts
+- Updated spacing and formatting in cart display
+- Optimized payment information layout for better user experience
+
 ## [1.1.0] - 2024-01-24
 ### Added
 - Initial release of WC Flex Pay

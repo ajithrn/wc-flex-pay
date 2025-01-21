@@ -580,16 +580,48 @@ class Product {
      */
     public function display_payment_type_in_cart($item_data, $cart_item) {
         if (isset($cart_item['wcfp_payment_type']) && $cart_item['wcfp_payment_type'] === 'installment') {
-            $schedules = $cart_item['wcfp_schedules'] ?? array();
-            $remaining_payments = count($schedules) - 1; // Minus initial payment
+            // Add payment summary
+            $item_data[] = array(
+                'key' => __('Total Price', 'wc-flex-pay'),
+                'value' => sprintf('<span class="wcfp-total">%s</span>', wc_price($cart_item['wcfp_total_price']))
+            );
             
             $item_data[] = array(
-                'key' => __('Payment Plan', 'wc-flex-pay'),
-                'value' => sprintf(
-                    __('%d installments', 'wc-flex-pay'),
-                    $remaining_payments + 1 // Include initial payment
-                )
+                'key' => __('Initial Payment', 'wc-flex-pay'),
+                'value' => sprintf('<span class="wcfp-initial">%s</span>', wc_price($cart_item['wcfp_initial_payment']))
             );
+            
+            $pending_payment = $cart_item['wcfp_total_price'] - $cart_item['wcfp_initial_payment'];
+            $item_data[] = array(
+                'key' => __('Pending Payment', 'wc-flex-pay'),
+                'value' => sprintf('<span class="wcfp-pending">%s</span>', wc_price($pending_payment))
+            );
+
+            // Add payment schedule if there are future payments
+            if (isset($cart_item['wcfp_schedules'])) {
+                $schedules = $cart_item['wcfp_schedules'];
+                $current_date = current_time('Y-m-d');
+                $future_schedules = array_filter($schedules, function($schedule) use ($current_date) {
+                    return strtotime($schedule['due_date']) > strtotime($current_date);
+                });
+
+                if (!empty($future_schedules)) {
+                    $schedule_rows = array();
+                    foreach ($future_schedules as $schedule) {
+                        $schedule_rows[] = sprintf(
+                            '%s: &nbsp;&nbsp; %s',
+                            date_i18n(get_option('date_format'), strtotime($schedule['due_date'])),
+                            wc_price($schedule['amount'])
+                        );
+                    }
+                    $schedule_html = implode("\n", $schedule_rows);
+                    
+                    $item_data[] = array(
+                        'key' => __('Payment Schedule', 'wc-flex-pay'),
+                        'value' => $schedule_html
+                    );
+                }
+            }
         }
         return $item_data;
     }
