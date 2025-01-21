@@ -193,62 +193,47 @@ class Admin {
      * Render dashboard page
      */
     public function render_dashboard_page() {
-        if (!$this->tables_exist()) {
-            ?>
-            <div class="notice notice-error">
-                <p><?php esc_html_e('WC Flex Pay database tables are not set up properly. Please deactivate and reactivate the plugin.', 'wc-flex-pay'); ?></p>
-            </div>
-            <?php
-            return;
-        }
-
         include WCFP_PLUGIN_DIR . 'templates/admin/dashboard.php';
-    }
-
-    /**
-     * Check if required tables exist
-     */
-    private function tables_exist() {
-        global $wpdb;
-        
-        $required_tables = array(
-            $wpdb->prefix . 'wcfp_payment_schedules',
-            $wpdb->prefix . 'wcfp_order_payments',
-            $wpdb->prefix . 'wcfp_payment_logs'
-        );
-
-        foreach ($required_tables as $table) {
-            if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**
      * Get payment data for reports
      */
     private function get_payment_report_data() {
-        global $wpdb;
+        $payment_data = array();
+        
+        // Get all orders with flex pay payments
+        $orders = wc_get_orders(array(
+            'meta_key' => '_wcfp_payments',
+            'limit' => -1,
+        ));
 
-        return $wpdb->get_results("
-            SELECT 
-                p.*, 
-                o.ID as order_id,
-                o.post_status as order_status,
-                pm1.meta_value as _billing_first_name,
-                pm2.meta_value as _billing_last_name,
-                pm3.meta_value as _billing_email,
-                pm4.meta_value as _payment_method_title
-            FROM {$wpdb->prefix}wcfp_order_payments p
-            LEFT JOIN {$wpdb->posts} o ON p.order_id = o.ID
-            LEFT JOIN {$wpdb->postmeta} pm1 ON o.ID = pm1.post_id AND pm1.meta_key = '_billing_first_name'
-            LEFT JOIN {$wpdb->postmeta} pm2 ON o.ID = pm2.post_id AND pm2.meta_key = '_billing_last_name'
-            LEFT JOIN {$wpdb->postmeta} pm3 ON o.ID = pm3.post_id AND pm3.meta_key = '_billing_email'
-            LEFT JOIN {$wpdb->postmeta} pm4 ON o.ID = pm4.post_id AND pm4.meta_key = '_payment_method_title'
-            ORDER BY p.due_date ASC
-        ", ARRAY_A);
+        foreach ($orders as $order) {
+            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
+            if (empty($payments)) continue;
+
+            foreach ($payments as $payment_id => $payment) {
+                $payment_data[] = array_merge(
+                    $payment,
+                    array(
+                        'id' => $payment_id,
+                        'order_id' => $order->get_id(),
+                        'order_status' => $order->get_status(),
+                        '_billing_first_name' => $order->get_billing_first_name(),
+                        '_billing_last_name' => $order->get_billing_last_name(),
+                        '_billing_email' => $order->get_billing_email(),
+                        '_payment_method_title' => $order->get_payment_method_title(),
+                    )
+                );
+            }
+        }
+
+        // Sort by due date
+        usort($payment_data, function($a, $b) {
+            return strtotime($a['due_date']) - strtotime($b['due_date']);
+        });
+
+        return $payment_data;
     }
 
     /**
@@ -269,76 +254,68 @@ class Admin {
      * Get order payments
      */
     private function get_order_payments($order_id) {
-        global $wpdb;
-        
-        return $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}wcfp_order_payments WHERE order_id = %d ORDER BY due_date ASC",
-                $order_id
-            ),
-            ARRAY_A
-        ) ?: array();
+        $payments = get_post_meta($order_id, '_wcfp_payments', true);
+        if (empty($payments)) {
+            return array();
+        }
+
+        // Sort by due date
+        uasort($payments, function($a, $b) {
+            return strtotime($a['due_date']) - strtotime($b['due_date']);
+        });
+
+        return $payments;
     }
 
     /**
      * Log payment action
      */
     private function log_payment($payment_id, $message) {
-        global $wpdb;
-        
-        $wpdb->insert(
-            $wpdb->prefix . 'wcfp_payment_logs',
-            array(
-                'payment_id' => $payment_id,
-                'type'      => 'info',
-                'message'   => $message,
-            ),
-            array('%d', '%s', '%s')
-        );
+        $orders = wc_get_orders(array(
+            'meta_key' => '_wcfp_payments',
+            'limit' => -1,
+        ));
+
+        foreach ($orders as $order) {
+            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
+            if (!empty($payments) && isset($payments[$payment_id])) {
+                $logs = get_post_meta($order->get_id(), '_wcfp_payment_logs', true);
+                if (!is_array($logs)) {
+                    $logs = array();
+                }
+
+                $logs[] = array(
+                    'payment_id' => $payment_id,
+                    'type' => 'info',
+                    'message' => $message,
+                    'created_at' => current_time('mysql')
+                );
+
+                update_post_meta($order->get_id(), '_wcfp_payment_logs', $logs);
+                break;
+            }
+        }
     }
 
     /**
      * Save payment schedule
      */
     private function save_payment_schedule($product_id, $schedule) {
-        if (!$this->tables_exist()) {
-            throw new \Exception(__('Database tables not found.', 'wc-flex-pay'));
-        }
+        $schedules = array();
 
-        global $wpdb;
-
-        // Delete existing schedule
-        $result = $wpdb->delete(
-            $wpdb->prefix . 'wcfp_payment_schedules',
-            array('product_id' => $product_id),
-            array('%d')
-        );
-
-        if ($result === false) {
-            throw new \Exception($wpdb->last_error ?: __('Failed to delete existing schedule.', 'wc-flex-pay'));
-        }
-
-        // Insert new schedule
         foreach ($schedule as $installment_number => $item) {
             if (empty($item['amount']) || empty($item['due_date'])) {
                 continue;
             }
 
-            $result = $wpdb->insert(
-                $wpdb->prefix . 'wcfp_payment_schedules',
-                array(
-                    'product_id'         => $product_id,
-                    'installment_number' => absint($installment_number),
-                    'amount'             => wc_format_decimal($item['amount']),
-                    'due_date'           => sanitize_text_field($item['due_date']),
-                ),
-                array('%d', '%d', '%f', '%s')
+            $schedules[] = array(
+                'installment_number' => absint($installment_number),
+                'amount' => wc_format_decimal($item['amount']),
+                'due_date' => sanitize_text_field($item['due_date']),
             );
-
-            if ($result === false) {
-                throw new \Exception($wpdb->last_error ?: __('Failed to insert schedule.', 'wc-flex-pay'));
-            }
         }
+
+        update_post_meta($product_id, '_wcfp_schedules', $schedules);
     }
 
     /**
@@ -375,30 +352,27 @@ class Admin {
         }
 
         $schedule_id = isset($_POST['schedule_id']) ? absint($_POST['schedule_id']) : 0;
-        if (!$schedule_id) {
-            wp_send_json_error(__('Invalid schedule ID.', 'wc-flex-pay'));
+        $product_id = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+        if (!$schedule_id || !$product_id) {
+            wp_send_json_error(__('Invalid schedule or product ID.', 'wc-flex-pay'));
         }
 
         try {
-            global $wpdb;
-
-            $data = array(
-                'amount'   => isset($_POST['amount']) ? wc_format_decimal($_POST['amount']) : 0,
-                'due_date' => isset($_POST['due_date']) ? sanitize_text_field($_POST['due_date']) : '',
-            );
-
-            $result = $wpdb->update(
-                $wpdb->prefix . 'wcfp_payment_schedules',
-                $data,
-                array('id' => $schedule_id),
-                array('%f', '%s'),
-                array('%d')
-            );
-
-            if ($result === false) {
-                throw new \Exception($wpdb->last_error ?: __('Failed to update schedule.', 'wc-flex-pay'));
+            $schedules = get_post_meta($product_id, '_wcfp_schedules', true);
+            if (!is_array($schedules)) {
+                $schedules = array();
             }
 
+            // Find and update the schedule
+            foreach ($schedules as &$schedule) {
+                if ($schedule['installment_number'] === $schedule_id) {
+                    $schedule['amount'] = isset($_POST['amount']) ? wc_format_decimal($_POST['amount']) : 0;
+                    $schedule['due_date'] = isset($_POST['due_date']) ? sanitize_text_field($_POST['due_date']) : '';
+                    break;
+                }
+            }
+
+            update_post_meta($product_id, '_wcfp_schedules', $schedules);
             wp_send_json_success(__('Schedule updated successfully.', 'wc-flex-pay'));
         } catch (\Exception $e) {
             wp_send_json_error($e->getMessage());
@@ -446,24 +420,25 @@ class Admin {
             return;
         }
 
-        if (!$this->tables_exist()) {
-            ?>
-            <div class="notice notice-error">
-                <p><?php esc_html_e('WC Flex Pay database tables are not set up properly. Please deactivate and reactivate the plugin.', 'wc-flex-pay'); ?></p>
-            </div>
-            <?php
-            return;
+        // Get all orders with flex pay payments
+        $orders = wc_get_orders(array(
+            'meta_key' => '_wcfp_payments',
+            'limit' => -1,
+        ));
+
+        $overdue_count = 0;
+        $current_date = current_time('mysql');
+
+        foreach ($orders as $order) {
+            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
+            if (empty($payments)) continue;
+
+            foreach ($payments as $payment) {
+                if ($payment['status'] === 'pending' && strtotime($payment['due_date']) < strtotime($current_date)) {
+                    $overdue_count++;
+                }
+            }
         }
-
-        global $wpdb;
-
-        // Check for overdue payments
-        $overdue_count = $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->prefix}wcfp_order_payments WHERE status = %s AND due_date < CURDATE()",
-                'pending'
-            )
-        );
 
         if ($overdue_count > 0) {
             ?>

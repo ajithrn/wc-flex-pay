@@ -9,59 +9,77 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-global $wpdb;
+// Get all orders with flex pay payments
+$orders = wc_get_orders(array(
+    'meta_key' => '_wcfp_payments',
+    'limit' => -1,
+));
 
-// Get payment statistics
-$total_pending = $wpdb->get_var(
-    "SELECT COUNT(*) FROM {$wpdb->prefix}wcfp_order_payments WHERE status = 'pending'"
-);
-$total_completed = $wpdb->get_var(
-    "SELECT COUNT(*) FROM {$wpdb->prefix}wcfp_order_payments WHERE status = 'completed'"
-);
-$total_overdue = $wpdb->get_var(
-    "SELECT COUNT(*) FROM {$wpdb->prefix}wcfp_order_payments 
-     WHERE status = 'pending' AND due_date < CURDATE()"
-);
+// Initialize counters and data arrays
+$total_pending = 0;
+$total_completed = 0;
+$total_overdue = 0;
+$payments = array();
+$current_time = current_time('timestamp');
 
-// Get payments data
-$payments = $wpdb->get_results(
-    "SELECT 
-        p.*, 
-        o.ID as order_id,
-        o.post_status as order_status,
-        pm1.meta_value as _billing_first_name,
-        pm2.meta_value as _billing_last_name,
-        pm3.meta_value as _billing_email,
-        pm4.meta_value as _payment_method_title,
-        oi.order_item_id,
-        oim1.meta_value as _product_id,
-        oim2.meta_value as _variation_id,
-        products.post_title as _product_name,
-        GROUP_CONCAT(DISTINCT CONCAT(attr.meta_key, ': ', attr.meta_value) SEPARATOR ', ') as _product_variation
-    FROM {$wpdb->prefix}wcfp_order_payments p
-    LEFT JOIN {$wpdb->posts} o ON p.order_id = o.ID
-    LEFT JOIN {$wpdb->postmeta} pm1 ON o.ID = pm1.post_id AND pm1.meta_key = '_billing_first_name'
-    LEFT JOIN {$wpdb->postmeta} pm2 ON o.ID = pm2.post_id AND pm2.meta_key = '_billing_last_name'
-    LEFT JOIN {$wpdb->postmeta} pm3 ON o.ID = pm3.post_id AND pm3.meta_key = '_billing_email'
-    LEFT JOIN {$wpdb->postmeta} pm4 ON o.ID = pm4.post_id AND pm4.meta_key = '_payment_method_title'
-    LEFT JOIN {$wpdb->prefix}woocommerce_order_items oi ON o.ID = oi.order_id AND oi.order_item_type = 'line_item'
-    LEFT JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim1 ON oi.order_item_id = oim1.order_item_id AND oim1.meta_key = '_product_id'
-    LEFT JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim2 ON oi.order_item_id = oim2.order_item_id AND oim2.meta_key = '_variation_id'
-    LEFT JOIN {$wpdb->posts} products ON COALESCE(NULLIF(oim2.meta_value, ''), oim1.meta_value) = products.ID
-    LEFT JOIN {$wpdb->prefix}woocommerce_order_itemmeta attr ON oi.order_item_id = attr.order_item_id 
-        AND attr.meta_key LIKE 'pa_%'
-    GROUP BY p.id
-    ORDER BY p.due_date ASC",
-    ARRAY_A
-);
+foreach ($orders as $order) {
+    $order_payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
+    if (empty($order_payments)) continue;
 
-// Calculate upcoming payments total
-$upcoming_total = 0;
-foreach ($payments as $payment) {
-    if ($payment['status'] === 'pending' && strtotime($payment['due_date']) > current_time('timestamp')) {
-        $upcoming_total += $payment['amount'];
+    foreach ($order_payments as $payment_id => $payment) {
+        // Count statistics
+        if ($payment['status'] === 'pending') {
+            $total_pending++;
+            if (strtotime($payment['due_date']) < $current_time) {
+                $total_overdue++;
+            }
+        } elseif ($payment['status'] === 'completed') {
+            $total_completed++;
+        }
+
+        // Get order data
+        $order_data = array(
+            'id' => $payment_id,
+            'order_id' => $order->get_id(),
+            'order_status' => $order->get_status(),
+            '_billing_first_name' => $order->get_billing_first_name(),
+            '_billing_last_name' => $order->get_billing_last_name(),
+            '_billing_email' => $order->get_billing_email(),
+            '_payment_method_title' => $order->get_payment_method_title(),
+            'amount' => $payment['amount'],
+            'due_date' => $payment['due_date'],
+            'status' => $payment['status'],
+        );
+
+        // Get product data
+        $items = $order->get_items();
+        $item = reset($items); // Get first item
+        if ($item) {
+            $product = $item->get_product();
+            if ($product) {
+                $order_data['_product_name'] = $product->get_name();
+                if ($product->is_type('variation')) {
+                    $order_data['_product_variation'] = wc_get_formatted_variation($product, true);
+                }
+            }
+        }
+
+        $payments[] = $order_data;
     }
 }
+
+// Sort payments by due date
+usort($payments, function($a, $b) {
+    return strtotime($a['due_date']) - strtotime($b['due_date']);
+});
+
+// Calculate upcoming payments total
+$upcoming_total = array_reduce($payments, function($carry, $payment) use ($current_time) {
+    if ($payment['status'] === 'pending' && strtotime($payment['due_date']) > $current_time) {
+        $carry += $payment['amount'];
+    }
+    return $carry;
+}, 0);
 ?>
 
 <div class="wrap">

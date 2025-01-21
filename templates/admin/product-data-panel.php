@@ -37,16 +37,13 @@ $enabled = $product->get_meta('_wcfp_enabled');
                 </thead>
                 <tbody>
                     <?php
-                    global $wpdb;
-                    $schedules = $wpdb->get_results(
-                        $wpdb->prepare(
-                            "SELECT * FROM {$wpdb->prefix}wcfp_payment_schedules WHERE product_id = %d ORDER BY installment_number ASC",
-                            $product->get_id()
-                        ),
-                        ARRAY_A
-                    );
-
+                    $schedules = get_post_meta($product->get_id(), '_wcfp_schedules', true);
                     if (!empty($schedules)) :
+                        // Sort schedules by installment number
+                        usort($schedules, function($a, $b) {
+                            return $a['installment_number'] - $b['installment_number'];
+                        });
+                        
                         foreach ($schedules as $schedule) :
                             ?>
                             <tr>
@@ -166,6 +163,24 @@ jQuery(function($) {
             $(this).find('input[name*="[amount]"]').attr('name', 'wcfp_schedule[' + number + '][amount]');
             $(this).find('input[name*="[due_date]"]').attr('name', 'wcfp_schedule[' + number + '][due_date]');
         });
+        
+        // Update regular price after removing row
+        updateRegularPrice();
     });
+
+    // Update regular price when installment amounts change
+    $(document).on('change', 'input[name^="wcfp_schedule"][name$="[amount]"]', function() {
+        updateRegularPrice();
+    });
+
+    // Function to update regular price
+    function updateRegularPrice() {
+        var total = 0;
+        $('.flex-pay-schedule tbody tr').each(function() {
+            var amount = parseFloat($(this).find('input[name^="wcfp_schedule"][name$="[amount]"]').val()) || 0;
+            total += amount;
+        });
+        $('#_regular_price').val(total.toFixed(2));
+    }
 });
 </script>

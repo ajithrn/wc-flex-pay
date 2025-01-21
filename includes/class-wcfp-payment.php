@@ -54,25 +54,24 @@ class Payment {
     }
 
     /**
-     * Check if required tables exist
+     * Get payment meta key
      *
-     * @return bool
+     * @param int $payment_id
+     * @return string
      */
-    private function tables_exist() {
-        global $wpdb;
-        
-        $required_tables = array(
-            $wpdb->prefix . 'wcfp_order_payments',
-            $wpdb->prefix . 'wcfp_payment_logs'
-        );
+    private function get_payment_meta_key($payment_id) {
+        return sprintf('_wcfp_payment_%d', $payment_id);
+    }
 
-        foreach ($required_tables as $table) {
-            if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {
-                return false;
-            }
-        }
-
-        return true;
+    /**
+     * Get next payment ID for order
+     *
+     * @param int $order_id
+     * @return int
+     */
+    private function get_next_payment_id($order_id) {
+        $payments = get_post_meta($order_id, '_wcfp_payments', true);
+        return !empty($payments) ? max(array_keys($payments)) + 1 : 1;
     }
 
     /**
@@ -82,11 +81,6 @@ class Payment {
      * @param WC_Order $order
      */
     public function process_scheduled_payment($amount_to_charge, $order) {
-        if (!$this->tables_exist()) {
-            $this->log_error('Database tables not found');
-            return;
-        }
-
         $payment_id = $this->get_next_pending_payment($order->get_id());
         if (!$payment_id) {
             return;
@@ -107,9 +101,6 @@ class Payment {
                 throw new \Exception(__('Payment gateway does not support scheduled payments.', 'wc-flex-pay'));
             }
 
-            // Start transaction
-            $wpdb->query('START TRANSACTION');
-
             // Update payment status to processing
             $this->update_payment_status($payment_id, 'processing');
 
@@ -124,13 +115,10 @@ class Payment {
                 if ($this->are_all_payments_completed($order->get_id())) {
                     $order->update_status('completed', __('All Flex Pay payments completed.', 'wc-flex-pay'));
                 }
-
-                $wpdb->query('COMMIT');
             } else {
                 throw new \Exception($result['messages'] ?? __('Payment processing failed.', 'wc-flex-pay'));
             }
         } catch (\Exception $e) {
-            $wpdb->query('ROLLBACK');
             $this->update_payment_status($payment_id, 'failed');
             $this->log_payment($payment_id, sprintf(__('Payment failed: %s', 'wc-flex-pay'), $e->getMessage()), 'error');
             $order->add_order_note(sprintf(__('Flex Pay scheduled payment failed: %s', 'wc-flex-pay'), $e->getMessage()));
@@ -146,58 +134,42 @@ class Payment {
      * Check for overdue payments
      */
     public function check_overdue_payments() {
-        if (!$this->tables_exist()) {
-            $this->log_error('Database tables not found');
-            return;
-        }
-
-        global $wpdb;
-
         $grace_period = absint(get_option('wcfp_overdue_grace_period', 3));
         $overdue_date = date('Y-m-d H:i:s', strtotime("-{$grace_period} days"));
 
-        $overdue_payments = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}wcfp_order_payments 
-                WHERE status = %s 
-                AND due_date < %s 
-                AND 1=%d",
-                'pending',
-                $overdue_date,
-                1
-            ),
-            ARRAY_A
-        ) ?: array();
+        // Get all orders with flex pay payments
+        $orders = wc_get_orders(array(
+            'meta_key' => '_wcfp_payments',
+            'limit' => -1,
+        ));
 
-        foreach ($overdue_payments as $payment) {
-            try {
-                // Start transaction
-                $wpdb->query('START TRANSACTION');
+        foreach ($orders as $order) {
+            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
+            if (empty($payments)) continue;
 
-                $this->update_payment_status($payment['id'], 'overdue');
-                $this->log_payment($payment['id'], __('Payment marked as overdue.', 'wc-flex-pay'), 'warning');
-                
-                $order = wc_get_order($payment['order_id']);
-                if ($order) {
-                    $order->add_order_note(
-                        sprintf(
-                            __('Flex Pay payment of %s is overdue (due date: %s).', 'wc-flex-pay'),
-                            wc_price($payment['amount']),
-                            date_i18n(get_option('date_format'), strtotime($payment['due_date']))
-                        )
-                    );
+            foreach ($payments as $payment_id => $payment) {
+                if ($payment['status'] === 'pending' && strtotime($payment['due_date']) < strtotime($overdue_date)) {
+                    try {
+                        $this->update_payment_status($payment_id, 'overdue');
+                        $this->log_payment($payment_id, __('Payment marked as overdue.', 'wc-flex-pay'), 'warning');
+                        
+                        $order->add_order_note(
+                            sprintf(
+                                __('Flex Pay payment of %s is overdue (due date: %s).', 'wc-flex-pay'),
+                                wc_price($payment['amount']),
+                                date_i18n(get_option('date_format'), strtotime($payment['due_date']))
+                            )
+                        );
 
-                    // Send overdue notification
-                    do_action('wcfp_payment_overdue', $payment['id'], $order);
+                        // Send overdue notification
+                        do_action('wcfp_payment_overdue', $payment_id, $order);
+                    } catch (\Exception $e) {
+                        $this->log_error($e->getMessage(), array(
+                            'payment_id' => $payment_id,
+                            'order_id' => $order->get_id()
+                        ));
+                    }
                 }
-
-                $wpdb->query('COMMIT');
-            } catch (\Exception $e) {
-                $wpdb->query('ROLLBACK');
-                $this->log_error($e->getMessage(), array(
-                    'payment_id' => $payment['id'],
-                    'order_id' => $payment['order_id']
-                ));
             }
         }
     }
@@ -209,34 +181,18 @@ class Payment {
      * @throws \Exception If payment processing fails
      */
     public function process_payment($payment_id) {
-        if (!$this->tables_exist()) {
-            throw new \Exception(__('Database tables not found.', 'wc-flex-pay'));
-        }
-
-        global $wpdb;
-
-        $payment = $wpdb->get_row(
-            $wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}wcfp_order_payments WHERE id = %d AND 1=%d",
-                $payment_id,
-                1
-            ),
-            ARRAY_A
-        );
-
-        if (!$payment) {
+        $payments = $this->get_order_payments_by_payment_id($payment_id);
+        if (empty($payments)) {
             throw new \Exception(__('Payment not found.', 'wc-flex-pay'));
         }
 
+        $payment = $payments[$payment_id];
         $order = wc_get_order($payment['order_id']);
         if (!$order) {
             throw new \Exception(__('Order not found.', 'wc-flex-pay'));
         }
 
         try {
-            // Start transaction
-            $wpdb->query('START TRANSACTION');
-
             // Update payment status to processing
             $this->update_payment_status($payment_id, 'processing');
             
@@ -262,13 +218,10 @@ class Payment {
                 if ($this->are_all_payments_completed($order->get_id())) {
                     $order->update_status('completed', __('All Flex Pay payments completed.', 'wc-flex-pay'));
                 }
-
-                $wpdb->query('COMMIT');
             } else {
                 throw new \Exception($result['messages'] ?? __('Payment processing failed.', 'wc-flex-pay'));
             }
         } catch (\Exception $e) {
-            $wpdb->query('ROLLBACK');
             $this->update_payment_status($payment_id, 'failed');
             $this->log_payment($payment_id, sprintf(__('Payment failed: %s', 'wc-flex-pay'), $e->getMessage()), 'error');
             $order->add_order_note(sprintf(__('Flex Pay payment failed: %s', 'wc-flex-pay'), $e->getMessage()));
@@ -283,25 +236,27 @@ class Payment {
      * @return int|false
      */
     public function get_next_pending_payment($order_id) {
-        if (!$this->tables_exist()) {
+        $payments = get_post_meta($order_id, '_wcfp_payments', true);
+        if (empty($payments)) {
             return false;
         }
 
-        global $wpdb;
+        $pending_payments = array_filter($payments, function($payment) {
+            return $payment['status'] === 'pending';
+        });
 
-        return $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT id FROM {$wpdb->prefix}wcfp_order_payments 
-                WHERE order_id = %d 
-                AND status = %s 
-                AND 1=%d
-                ORDER BY due_date ASC 
-                LIMIT 1",
-                $order_id,
-                'pending',
-                1
-            )
-        );
+        if (empty($pending_payments)) {
+            return false;
+        }
+
+        // Sort by due date
+        uasort($pending_payments, function($a, $b) {
+            return strtotime($a['due_date']) - strtotime($b['due_date']);
+        });
+
+        // Return first payment ID
+        reset($pending_payments);
+        return key($pending_payments);
     }
 
     /**
@@ -311,25 +266,18 @@ class Payment {
      * @return bool
      */
     public function are_all_payments_completed($order_id) {
-        if (!$this->tables_exist()) {
+        $payments = get_post_meta($order_id, '_wcfp_payments', true);
+        if (empty($payments)) {
             return false;
         }
 
-        global $wpdb;
+        foreach ($payments as $payment) {
+            if ($payment['status'] !== 'completed') {
+                return false;
+            }
+        }
 
-        $pending_count = $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->prefix}wcfp_order_payments 
-                WHERE order_id = %d 
-                AND status != %s 
-                AND 1=%d",
-                $order_id,
-                'completed',
-                1
-            )
-        );
-
-        return $pending_count === '0';
+        return true;
     }
 
     /**
@@ -340,27 +288,24 @@ class Payment {
      * @throws \Exception If status update fails
      */
     public function update_payment_status($payment_id, $status) {
-        if (!$this->tables_exist()) {
-            throw new \Exception(__('Database tables not found.', 'wc-flex-pay'));
-        }
-
         if (!array_key_exists($status, $this->statuses)) {
             throw new \Exception(__('Invalid payment status.', 'wc-flex-pay'));
         }
 
-        global $wpdb;
-
-        $result = $wpdb->update(
-            $wpdb->prefix . 'wcfp_order_payments',
-            array('status' => $status),
-            array('id' => $payment_id),
-            array('%s'),
-            array('%d')
-        );
-
-        if ($result === false) {
-            throw new \Exception($wpdb->last_error ?: __('Failed to update payment status.', 'wc-flex-pay'));
+        $payments = $this->get_order_payments_by_payment_id($payment_id);
+        if (empty($payments) || !isset($payments[$payment_id])) {
+            throw new \Exception(__('Payment not found.', 'wc-flex-pay'));
         }
+
+        $order_id = $payments[$payment_id]['order_id'];
+        $all_payments = get_post_meta($order_id, '_wcfp_payments', true);
+        
+        if (!is_array($all_payments)) {
+            $all_payments = array();
+        }
+
+        $all_payments[$payment_id]['status'] = $status;
+        update_post_meta($order_id, '_wcfp_payments', $all_payments);
 
         do_action('wcfp_payment_status_' . $status, $payment_id);
         do_action('wcfp_payment_status_changed', $payment_id, $status);
@@ -375,25 +320,26 @@ class Payment {
      * @throws \Exception If logging fails
      */
     public function log_payment($payment_id, $message, $type = 'info') {
-        if (!$this->tables_exist()) {
-            throw new \Exception(__('Database tables not found.', 'wc-flex-pay'));
+        $payments = $this->get_order_payments_by_payment_id($payment_id);
+        if (empty($payments) || !isset($payments[$payment_id])) {
+            throw new \Exception(__('Payment not found.', 'wc-flex-pay'));
         }
 
-        global $wpdb;
+        $order_id = $payments[$payment_id]['order_id'];
+        $logs = get_post_meta($order_id, '_wcfp_payment_logs', true);
+        
+        if (!is_array($logs)) {
+            $logs = array();
+        }
 
-        $result = $wpdb->insert(
-            $wpdb->prefix . 'wcfp_payment_logs',
-            array(
-                'payment_id' => $payment_id,
-                'type'       => $type,
-                'message'    => $message,
-            ),
-            array('%d', '%s', '%s')
+        $logs[] = array(
+            'payment_id' => $payment_id,
+            'type' => $type,
+            'message' => $message,
+            'created_at' => current_time('mysql')
         );
 
-        if ($result === false) {
-            throw new \Exception($wpdb->last_error ?: __('Failed to log payment.', 'wc-flex-pay'));
-        }
+        update_post_meta($order_id, '_wcfp_payment_logs', $logs);
     }
 
     /**
@@ -419,23 +365,28 @@ class Payment {
      * @return array
      */
     public function get_payment_history($payment_id) {
-        if (!$this->tables_exist()) {
+        $payments = $this->get_order_payments_by_payment_id($payment_id);
+        if (empty($payments) || !isset($payments[$payment_id])) {
             return array();
         }
 
-        global $wpdb;
+        $order_id = $payments[$payment_id]['order_id'];
+        $logs = get_post_meta($order_id, '_wcfp_payment_logs', true);
+        
+        if (!is_array($logs)) {
+            return array();
+        }
 
-        return $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}wcfp_payment_logs 
-                WHERE payment_id = %d 
-                AND 1=%d
-                ORDER BY created_at DESC",
-                $payment_id,
-                1
-            ),
-            ARRAY_A
-        ) ?: array();
+        // Filter logs for specific payment ID and sort by created_at
+        $payment_logs = array_filter($logs, function($log) use ($payment_id) {
+            return $log['payment_id'] === $payment_id;
+        });
+
+        usort($payment_logs, function($a, $b) {
+            return strtotime($b['created_at']) - strtotime($a['created_at']);
+        });
+
+        return $payment_logs;
     }
 
     /**
@@ -459,23 +410,33 @@ class Payment {
      * @return array
      */
     public function get_order_payments($order_id) {
-        if (!$this->tables_exist()) {
-            return array();
+        $payments = get_post_meta($order_id, '_wcfp_payments', true);
+        return !empty($payments) ? $payments : array();
+    }
+
+    /**
+     * Get order payments by payment ID
+     *
+     * @param int $payment_id
+     * @return array
+     */
+    private function get_order_payments_by_payment_id($payment_id) {
+        $orders = wc_get_orders(array(
+            'meta_key' => '_wcfp_payments',
+            'limit' => -1,
+        ));
+
+        foreach ($orders as $order) {
+            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
+            if (!empty($payments) && isset($payments[$payment_id])) {
+                return array($payment_id => array_merge(
+                    $payments[$payment_id],
+                    array('order_id' => $order->get_id())
+                ));
+            }
         }
 
-        global $wpdb;
-
-        return $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}wcfp_order_payments 
-                WHERE order_id = %d 
-                AND 1=%d
-                ORDER BY due_date ASC",
-                $order_id,
-                1
-            ),
-            ARRAY_A
-        ) ?: array();
+        return array();
     }
 
     /**

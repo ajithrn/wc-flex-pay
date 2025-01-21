@@ -45,26 +45,6 @@ class Notification {
         add_action('wcfp_payment_status_overdue', array($this, 'notify_admin_payment_overdue'));
     }
 
-    /**
-     * Check if required tables exist
-     *
-     * @return bool
-     */
-    private function tables_exist() {
-        global $wpdb;
-        
-        $required_tables = array(
-            $wpdb->prefix . 'wcfp_order_payments'
-        );
-
-        foreach ($required_tables as $table) {
-            if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {
-                return false;
-            }
-        }
-
-        return true;
-    }
 
     /**
      * Register email classes
@@ -85,11 +65,6 @@ class Notification {
      * Schedule payment reminders
      */
     public function schedule_reminders() {
-        if (!$this->tables_exist()) {
-            $this->log_error('Database tables not found');
-            return;
-        }
-
         if (!wp_next_scheduled('wcfp_payment_reminder')) {
             wp_schedule_event(time(), 'daily', 'wcfp_payment_reminder');
         }
@@ -99,56 +74,46 @@ class Notification {
      * Send payment reminder
      */
     public function send_payment_reminder() {
-        if (!$this->tables_exist()) {
-            $this->log_error('Database tables not found');
-            return;
-        }
-
         if (!$this->is_notification_enabled('reminder')) {
             return;
         }
 
-        global $wpdb;
-
         $reminder_days = absint(get_option('wcfp_reminder_days', 3));
         $reminder_date = date('Y-m-d H:i:s', strtotime("+{$reminder_days} days"));
+        $current_date = current_time('mysql');
 
-        $upcoming_payments = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}wcfp_order_payments 
-                WHERE status = %s 
-                AND due_date <= %s 
-                AND due_date > NOW() 
-                AND 1=%d",
-                'pending',
-                $reminder_date,
-                1
-            ),
-            ARRAY_A
-        ) ?: array();
+        // Get all orders with flex pay payments
+        $orders = wc_get_orders(array(
+            'meta_key' => '_wcfp_payments',
+            'limit' => -1,
+        ));
 
-        foreach ($upcoming_payments as $payment) {
-            try {
-                $order = wc_get_order($payment['order_id']);
-                if (!$order) {
-                    continue;
+        foreach ($orders as $order) {
+            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
+            if (empty($payments)) continue;
+
+            foreach ($payments as $payment_id => $payment) {
+                if ($payment['status'] === 'pending' && 
+                    strtotime($payment['due_date']) <= strtotime($reminder_date) && 
+                    strtotime($payment['due_date']) > strtotime($current_date)) {
+                    try {
+                        $mailer = WC()->mailer();
+                        $email = new \WCFP_Email_Payment_Reminder();
+                        
+                        $email->trigger($payment_id, $order);
+
+                        // Log reminder sent
+                        $this->log_notification('reminder_sent', $payment_id, array(
+                            'due_date' => $payment['due_date'],
+                            'amount' => $payment['amount']
+                        ));
+                    } catch (\Exception $e) {
+                        $this->log_error($e->getMessage(), array(
+                            'payment_id' => $payment_id,
+                            'order_id' => $order->get_id()
+                        ));
+                    }
                 }
-
-                $mailer = WC()->mailer();
-                $email = new \WCFP_Email_Payment_Reminder();
-                
-                $email->trigger($payment['id'], $order);
-
-                // Log reminder sent
-                $this->log_notification('reminder_sent', $payment['id'], array(
-                    'due_date' => $payment['due_date'],
-                    'amount' => $payment['amount']
-                ));
-            } catch (\Exception $e) {
-                $this->log_error($e->getMessage(), array(
-                    'payment_id' => $payment['id'],
-                    'order_id' => $payment['order_id']
-                ));
             }
         }
     }
@@ -345,20 +310,23 @@ class Notification {
      * @return array|null
      */
     private function get_payment($payment_id) {
-        if (!$this->tables_exist()) {
-            return null;
+        // Get all orders with flex pay payments
+        $orders = wc_get_orders(array(
+            'meta_key' => '_wcfp_payments',
+            'limit' => -1,
+        ));
+
+        foreach ($orders as $order) {
+            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
+            if (!empty($payments) && isset($payments[$payment_id])) {
+                return array_merge(
+                    $payments[$payment_id],
+                    array('order_id' => $order->get_id())
+                );
+            }
         }
 
-        global $wpdb;
-
-        return $wpdb->get_row(
-            $wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}wcfp_order_payments WHERE id = %d AND 1=%d",
-                $payment_id,
-                1
-            ),
-            ARRAY_A
-        );
+        return null;
     }
 
     /**

@@ -155,11 +155,9 @@ final class WC_Flex_Pay {
         // Initialize components
         $this->init_components();
 
-        // Run database updates if needed
-        if (get_option('wcfp_db_version') != WCFP_VERSION) {
-            require_once WCFP_PLUGIN_DIR . 'includes/class-wcfp-install.php';
-            \WCFP\Install::update_payment_schedules_table();
-            update_option('wcfp_db_version', WCFP_VERSION);
+        // Update version if needed
+        if (get_option('wcfp_version') != WCFP_VERSION) {
+            update_option('wcfp_version', WCFP_VERSION);
         }
     }
 
@@ -198,15 +196,10 @@ final class WC_Flex_Pay {
             wp_die(__('WC Flex Pay requires WooCommerce to be installed and activated.', 'wc-flex-pay'));
         }
 
-        global $wpdb;
-
         // Load Install class
         require_once WCFP_PLUGIN_DIR . 'includes/class-wcfp-install.php';
         
         try {
-            // Create necessary database tables
-            \WCFP\Install::create_tables();
-            
             // Add capabilities
             \WCFP\Install::add_capabilities();
             
@@ -215,7 +208,6 @@ final class WC_Flex_Pay {
             
             // Update version
             update_option('wcfp_version', WCFP_VERSION);
-            update_option('wcfp_db_version', WCFP_VERSION);
             
             // Clear the permalinks
             flush_rewrite_rules();

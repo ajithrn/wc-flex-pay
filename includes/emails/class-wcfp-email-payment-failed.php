@@ -63,17 +63,6 @@ if (!class_exists('WCFP_Email_Payment_Failed', false)) :
             parent::__construct();
         }
 
-        /**
-         * Check if required tables exist
-         *
-         * @return bool
-         */
-        private function tables_exist() {
-            global $wpdb;
-            
-            $table = $wpdb->prefix . 'wcfp_order_payments';
-            return $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) === $table;
-        }
 
         /**
          * Get email subject.
@@ -174,20 +163,23 @@ if (!class_exists('WCFP_Email_Payment_Failed', false)) :
          * @return array|null
          */
         private function get_payment($payment_id) {
-            if (!$this->tables_exist()) {
-                return null;
+            // Get all orders with flex pay payments
+            $orders = wc_get_orders(array(
+                'meta_key' => '_wcfp_payments',
+                'limit' => -1,
+            ));
+
+            foreach ($orders as $order) {
+                $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
+                if (!empty($payments) && isset($payments[$payment_id])) {
+                    return array_merge(
+                        $payments[$payment_id],
+                        array('order_id' => $order->get_id())
+                    );
+                }
             }
 
-            global $wpdb;
-
-            return $wpdb->get_row(
-                $wpdb->prepare(
-                    "SELECT * FROM {$wpdb->prefix}wcfp_order_payments WHERE id = %d AND 1=%d",
-                    $payment_id,
-                    1
-                ),
-                ARRAY_A
-            );
+            return null;
         }
 
         /**

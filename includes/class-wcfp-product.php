@@ -219,58 +219,15 @@ class Product {
      * Save payment schedules
      */
     private function save_payment_schedules($product_id, $schedules) {
-        if (!$this->tables_exist()) {
-            throw new \Exception(__('Database tables not found.', 'wc-flex-pay'));
-        }
-
-        global $wpdb;
-
-        $result = $wpdb->delete(
-            $wpdb->prefix . 'wcfp_payment_schedules',
-            array('product_id' => $product_id),
-            array('%d')
-        );
-
-        if ($result === false) {
-            throw new \Exception($wpdb->last_error ?: __('Failed to delete existing schedules.', 'wc-flex-pay'));
-        }
-
-        foreach ($schedules as $schedule) {
-            $result = $wpdb->insert(
-                $wpdb->prefix . 'wcfp_payment_schedules',
-                array(
-                    'product_id'         => $product_id,
-                    'installment_number' => $schedule['installment_number'],
-                    'amount'             => $schedule['amount'],
-                    'due_date'           => $schedule['due_date'],
-                    'description'        => $schedule['description'],
-                ),
-                array('%d', '%d', '%f', '%s', '%s')
-            );
-
-            if ($result === false) {
-                throw new \Exception($wpdb->last_error ?: __('Failed to insert schedule.', 'wc-flex-pay'));
-            }
-        }
+        update_post_meta($product_id, '_wcfp_schedules', $schedules);
     }
 
     /**
      * Get payment schedules for a product
      */
     public function get_payment_schedules($product_id) {
-        if (!$this->tables_exist()) {
-            return array();
-        }
-
-        global $wpdb;
-
-        return $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}wcfp_payment_schedules WHERE product_id = %d ORDER BY installment_number ASC",
-                $product_id
-            ),
-            ARRAY_A
-        ) ?: array();
+        $schedules = get_post_meta($product_id, '_wcfp_schedules', true);
+        return !empty($schedules) ? $schedules : array();
     }
 
     /**
@@ -278,14 +235,6 @@ class Product {
      */
     public function is_flex_pay_enabled($product) {
         return 'yes' === get_post_meta($product->get_id(), '_wcfp_enabled', true);
-    }
-
-    /**
-     * Check if required tables exist
-     */
-    private function tables_exist() {
-        global $wpdb;
-        return $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $wpdb->prefix . 'wcfp_payment_schedules')) === $wpdb->prefix . 'wcfp_payment_schedules';
     }
 
     /**

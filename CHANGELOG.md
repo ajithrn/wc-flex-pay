@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0] - 2025-01-22
+### Changed
+- Switched payment data storage from custom tables to WordPress post meta
+- Improved regular price synchronization with installment amounts in admin
+- Removed database tables in favor of meta-based storage
+- Updated admin UI to use meta-based data storage
+- Enhanced performance by using native WordPress data structures
+
 ## [1.1.1] - 2024-01-25
 ### Changed
 - Improved payment schedule display in cart

@@ -55,9 +55,15 @@ wc-flex-pay/
 │       ├── components/      # Shared components
 │       ├── admin.scss      # Main admin stylesheet
 │       └── frontend.scss   # Main frontend stylesheet
-├── includes/               # PHP classes
+├── includes/
+│   ├── admin/              # Admin classes
+│   ├── emails/             # Email notification classes
+│   └── core classes        # Core functionality
 ├── languages/             # Translation files
 └── templates/             # Template files
+    ├── admin/            # Admin templates
+    ├── emails/           # Email templates
+    └── frontend/         # Frontend templates
 ```
 
 ### Styling System
@@ -121,10 +127,12 @@ npm run sass
 npm run watch
 ```
 
-### Database Tables
+### Data Storage
 
-The plugin creates custom tables for payment schedules:
-- `{prefix}wcfp_payment_schedules`: Stores product payment schedules
+The plugin uses WordPress post meta for data storage:
+- `_wcfp_schedules`: Stores product payment schedules (product meta)
+- `_wcfp_payments`: Stores order payment information (order meta)
+- `_wcfp_payment_logs`: Stores payment activity logs (order meta)
 
 ### Hooks and Filters
 
