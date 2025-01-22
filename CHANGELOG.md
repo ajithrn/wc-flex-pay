@@ -1,6 +1,14 @@
 # Changelog
 
-## [1.2.0] - 2025-01-22
+## [1.2.1] - 2025-01-22
+### Added
+- New order statuses for better payment tracking:
+  - wc-flex-pay-pending: Flex Pay Pending
+  - wc-flex-pay-partial: Flex Pay Partial
+  - wc-flex-pay-overdue: Flex Pay Overdue
+  - wc-flex-pay-completed: Flex Pay Completed
+  - wc-flex-pay-failed: Flex Pay Failed
+
 ### Changed
 - Switched payment data storage from custom tables to WordPress post meta
 - Improved regular price synchronization with installment amounts in admin

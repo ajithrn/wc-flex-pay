@@ -1,6 +1,6 @@
 {
   "name": "wc-flex-pay",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "WooCommerce Flex Pay Plugin",
   "scripts": {
     "sass": "sass assets/scss/admin.scss:assets/css/admin.css assets/scss/frontend.scss:assets/css/frontend.css --style=compressed --no-source-map",
