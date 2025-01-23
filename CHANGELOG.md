@@ -1,4 +1,7 @@
 # Changelog
+## [1.4.1] - 2025-01-23
+### Changed
+- Removed Action colum from Upcoming table
 
 ## [1.4.0] - 2025-01-23
 ### Added

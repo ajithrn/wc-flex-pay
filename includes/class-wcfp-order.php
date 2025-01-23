@@ -587,35 +587,87 @@ class Order {
                 return;
             }
 
-            // Update parent order installment status
-            foreach ($parent_order->get_items() as $item) {
-                if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
-                    $payment_status = $item->get_meta('_wcfp_payment_status');
-                    if (!empty($payment_status[$installment_number - 1])) {
-                        $payment_status[$installment_number - 1]['status'] = 'completed';
-                        $payment_status[$installment_number - 1]['payment_date'] = current_time('Y-m-d');
-                        $payment_status[$installment_number - 1]['transaction_id'] = $order->get_transaction_id();
-                        $item->update_meta_data('_wcfp_payment_status', $payment_status);
-                        $item->save();
-                        break;
+            // Update sub-order status
+            $order->update_status('completed', __('Payment completed successfully.', 'wc-flex-pay'));
+
+            // Get parent order payments data
+            $payments = get_post_meta($parent_order_id, '_wcfp_payments', true) ?: array();
+            
+            if (!empty($payments['installments'][$installment_number - 1])) {
+                // Update installment data
+                $payments['installments'][$installment_number - 1]['status'] = 'completed';
+                $payments['installments'][$installment_number - 1]['payment_date'] = current_time('Y-m-d');
+                $payments['installments'][$installment_number - 1]['transaction_id'] = $order->get_transaction_id();
+                $payments['installments'][$installment_number - 1]['sub_order_id'] = $order_id;
+
+                // Update payment summary
+                $total_installments = count($payments['installments']);
+                $paid_installments = 0;
+                $total_amount = 0;
+                $paid_amount = 0;
+                $next_due_date = null;
+
+                foreach ($payments['installments'] as $installment) {
+                    $total_amount += $installment['amount'];
+                    
+                    if ($installment['status'] === 'completed') {
+                        $paid_installments++;
+                        $paid_amount += $installment['amount'];
+                    } elseif ($installment['status'] === 'pending' && (!$next_due_date || strtotime($installment['due_date']) < strtotime($next_due_date))) {
+                        $next_due_date = $installment['due_date'];
                     }
                 }
+
+                $payments['summary'] = array(
+                    'total_installments' => $total_installments,
+                    'paid_installments' => $paid_installments,
+                    'total_amount' => $total_amount,
+                    'paid_amount' => $paid_amount,
+                    'next_due_date' => $next_due_date
+                );
+
+                // Update parent order meta
+                update_post_meta($parent_order_id, '_wcfp_payments', $payments);
+
+                // Update parent order items meta
+                foreach ($parent_order->get_items() as $item) {
+                    if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                        $payment_status = $item->get_meta('_wcfp_payment_status');
+                        if (!empty($payment_status[$installment_number - 1])) {
+                            $payment_status[$installment_number - 1]['status'] = 'completed';
+                            $payment_status[$installment_number - 1]['payment_date'] = current_time('Y-m-d');
+                            $payment_status[$installment_number - 1]['transaction_id'] = $order->get_transaction_id();
+                            $item->update_meta_data('_wcfp_payment_status', $payment_status);
+                            $item->save();
+                            break;
+                        }
+                    }
+                }
+
+                // Add note to parent order
+                $this->add_order_note_with_icon(
+                    $parent_order,
+                    sprintf(
+                        /* translators: 1: installment number, 2: sub-order number, 3: amount */
+                        __('Installment %1$d completed via sub-order #%2$s - Amount: %3$s', 'wc-flex-pay'),
+                        $installment_number,
+                        $order->get_order_number(),
+                        wc_price($payments['installments'][$installment_number - 1]['amount'])
+                    ),
+                    'payment'
+                );
+
+                // Update payment link status if exists
+                $links = get_post_meta($parent_order_id, '_wcfp_payment_links', true) ?: array();
+                $link_key = "{$installment_number}";
+                if (!empty($links[$link_key])) {
+                    $links[$link_key]['status'] = 'completed';
+                    update_post_meta($parent_order_id, '_wcfp_payment_links', $links);
+                }
+
+                // Check if all payments are completed
+                $this->check_payment_completion($parent_order_id, '', '');
             }
-
-            // Add note to parent order
-            $this->add_order_note_with_icon(
-                $parent_order,
-                sprintf(
-                    /* translators: 1: installment number, 2: sub-order number */
-                    __('Installment %1$d completed via sub-order #%2$s', 'wc-flex-pay'),
-                    $installment_number,
-                    $order->get_order_number()
-                ),
-                'payment'
-            );
-
-            // Check if all payments are completed
-            $this->check_payment_completion($parent_order_id, '', '');
 
         } finally {
             self::$updating_status = false;

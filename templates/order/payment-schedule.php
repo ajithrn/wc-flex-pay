@@ -184,13 +184,7 @@ foreach ($links as $installment_number => $link) {
                                     </button>
                                 <?php endif; ?>
                             </td>
-                            <td>
-                                <button type="button" 
-                                        class="button process-payment" 
-                                        data-payment-id="<?php echo esc_attr($installment['number']); ?>">
-                                    <?php esc_html_e('Process Payment', 'wc-flex-pay'); ?>
-                                </button>
-                            </td>
+                            <td></td>
                         <?php else : ?>
                             <td colspan="2">
                                 <?php if ($link_active) : ?>
