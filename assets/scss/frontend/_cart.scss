@@ -1,62 +1,159 @@
 @use "../abstracts/variables" as *;
 
+.wcfp-installment-notice {
+    td {
+        padding: $spacing-lg;
+    }
 
-// Hide sale badge for flex pay products
-.wc-block-components-sale-badge {
-  display: none !important;
+    .woocommerce-info {
+        margin: 0;
+        padding: $spacing-lg;
+        background: $color-background;
+        border: 1px solid $color-border;
+        border-radius: $border-radius-lg;
+        box-shadow: $box-shadow-sm;
+
+        h4 {
+            margin: 0 0 $spacing-lg;
+            color: $color-primary;
+            font-size: $font-size-lg;
+            text-align: center;
+        }
+    }
 }
 
-// Cart payment details
-.wc-block-components-product-details {
-    li {
-        display: flex;
-        align-items: flex-start;
-        margin-bottom: $spacing-xs !important;
-    }
+.wcfp-payment-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-lg;
+}
 
-    &__name {
-        color: $color-text-secondary;
-        font-size: $font-size-md;
-        min-width: 120px;
-        padding-right: $spacing-sm;
-    }
+.wcfp-payment-date {
+    padding: $spacing-md;
+    background: $color-background-light;
+    border: 1px solid $color-border;
+    border-radius: $border-radius-md;
+    transition: $transition-default;
 
-    &__value {
-        font-size: $font-size-md;
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: $box-shadow-sm;
+        border-color: $color-primary;
+    }
+}
+
+.wcfp-date-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $spacing-sm;
+    padding-bottom: $spacing-sm;
+    border-bottom: 1px solid $color-border;
+
+    strong {
         color: $color-text-primary;
-        font-weight: $font-weight-medium;
+        font-size: $font-size-base;
     }
 
-    // Payment schedule
-    &__payment-schedule {
-        .wc-block-components-product-details__value {
-            white-space: pre-line;
-            color: $color-text-secondary;
-            line-height: 1.6;
-            display: inline-block;
-            padding-top: 2px;
+    .wcfp-total {
+        color: $color-primary;
+        font-weight: $font-weight-bold;
+    }
+}
+
+.wcfp-installment-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+        padding: $spacing-sm;
+        margin-bottom: $spacing-xs;
+        background: $color-background;
+        border-radius: $border-radius-sm;
+        color: $color-text-secondary;
+        font-size: $font-size-sm;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+
+        &:hover {
+            background: rgba($color-primary, 0.05);
         }
     }
 }
 
-// Variation list fallback
-dl.variation {
-    dt {
-        color: $color-text-secondary;
-        font-size: $font-size-md;
-        margin-bottom: 2px !important;
+// Cart item display
+.wcfp-subtotal-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+}
+
+.wcfp-initial-payment {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+}
+
+.wcfp-pending-payment {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+
+    small {
+        display: block;
+        line-height: 1.4;
+    }
+}
+
+.wcfp-pending-amount {
+    color: $color-warning;
+    font-weight: $font-weight-medium;
+}
+
+.wcfp-next-payment {
+    color: $color-text-secondary;
+    background: rgba($color-primary, 0.05);
+    padding: $spacing-xs $spacing-sm;
+    border-radius: $border-radius-sm;
+    border: 1px solid rgba($color-primary, 0.1);
+}
+
+// Payment badges
+.wcfp-total,
+.wcfp-initial,
+.wcfp-pending {
+    display: inline-block;
+    padding: $spacing-xs $spacing-sm;
+    border-radius: $border-radius-sm;
+    font-weight: $font-weight-medium;
+}
+
+.wcfp-total {
+    background: rgba($color-primary, 0.1);
+    color: $color-primary;
+}
+
+.wcfp-initial {
+    background: rgba($color-success, 0.1);
+    color: $color-success;
+}
+
+.wcfp-pending {
+    background: rgba($color-warning, 0.1);
+    color: $color-warning;
+}
+
+@media (max-width: $breakpoint-tablet) {
+    .wcfp-date-header {
+        flex-direction: column;
+        text-align: center;
+        gap: $spacing-xs;
     }
 
-    dd {
-        margin: 0 0 8px !important;
-        font-size: $font-size-md;
-        
-        &:last-child {
-            margin-bottom: 0 !important;
-        }
-
-        p {
-            margin: 0 !important;
-        }
+    .wcfp-installment-list li {
+        text-align: center;
     }
 }

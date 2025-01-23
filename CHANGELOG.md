@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.3.0] - 2025-01-23
+### Added
+- Sub-order system for individual installment management
+- Payment link generation for each installment
+- Enhanced payment tracking with detailed status updates
+- New table component system for consistent data display
+- Responsive design improvements across admin and frontend
+
+### Changed
+- Switched from schedule-based to installment-based payment system
+- Improved payment history interface with better organization
+- Enhanced status badge system with new visual indicators
+- Updated payment schedule display with better visualization
+- Refined cart and order displays for better user experience
+
+### Enhanced
+- Admin interface with new sub-order management
+- Order list with Flex Pay information column
+- Payment tracking with detailed installment status
+- Frontend payment selection interface
+- Email notification system for payment reminders
+
 ## [1.2.1] - 2025-01-22
 ### Added
 - New order statuses for better payment tracking:

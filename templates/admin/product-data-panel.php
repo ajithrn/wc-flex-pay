@@ -37,14 +37,11 @@ $enabled = $product->get_meta('_wcfp_enabled');
                 </thead>
                 <tbody>
                     <?php
-                    $schedules = get_post_meta($product->get_id(), '_wcfp_schedules', true);
-                    if (!empty($schedules)) :
-                        // Sort schedules by installment number
-                        usort($schedules, function($a, $b) {
-                            return $a['installment_number'] - $b['installment_number'];
-                        });
-                        
-                        foreach ($schedules as $schedule) :
+                    $payments = get_post_meta($product->get_id(), '_wcfp_payments', true);
+                    $installments = !empty($payments['installments']) ? $payments['installments'] : array();
+                    
+                    if (!empty($installments)) :
+                        foreach ($installments as $installment) :
                             ?>
                             <tr>
                                 <td>
@@ -52,29 +49,29 @@ $enabled = $product->get_meta('_wcfp_enabled');
                                     printf(
                                         /* translators: %d: installment number */
                                         esc_html__('Payment %d', 'wc-flex-pay'),
-                                        $schedule['installment_number']
+                                        $installment['number']
                                     );
                                     ?>
                                     <input type="hidden" 
-                                           name="wcfp_schedule[<?php echo esc_attr($schedule['installment_number']); ?>][installment_number]" 
-                                           value="<?php echo esc_attr($schedule['installment_number']); ?>">
+                                           name="wcfp_installments[<?php echo esc_attr($installment['number']); ?>][number]" 
+                                           value="<?php echo esc_attr($installment['number']); ?>">
                                 </td>
                                 <td>
                                     <input type="number" 
-                                           name="wcfp_schedule[<?php echo esc_attr($schedule['installment_number']); ?>][amount]" 
-                                           value="<?php echo esc_attr($schedule['amount']); ?>"
+                                           name="wcfp_installments[<?php echo esc_attr($installment['number']); ?>][amount]" 
+                                           value="<?php echo esc_attr($installment['amount']); ?>"
                                            step="0.01"
                                            min="0"
                                            required>
                                 </td>
                                 <td>
                                     <input type="date" 
-                                           name="wcfp_schedule[<?php echo esc_attr($schedule['installment_number']); ?>][due_date]" 
-                                           value="<?php echo esc_attr($schedule['due_date']); ?>"
+                                           name="wcfp_installments[<?php echo esc_attr($installment['number']); ?>][due_date]" 
+                                           value="<?php echo esc_attr($installment['due_date']); ?>"
                                            required>
                                 </td>
                                 <td>
-                                    <button type="button" class="button remove-schedule">
+                                    <button type="button" class="button remove-installment">
                                         <?php esc_html_e('Remove', 'wc-flex-pay'); ?>
                                     </button>
                                 </td>
@@ -87,8 +84,8 @@ $enabled = $product->get_meta('_wcfp_enabled');
                 <tfoot>
                     <tr>
                         <td colspan="4">
-                            <button type="button" class="button add-schedule">
-                                <?php esc_html_e('Add Payment', 'wc-flex-pay'); ?>
+                            <button type="button" class="button add-installment">
+                                <?php esc_html_e('Add Installment', 'wc-flex-pay'); ?>
                             </button>
                         </td>
                     </tr>
@@ -98,15 +95,15 @@ $enabled = $product->get_meta('_wcfp_enabled');
     </div>
 </div>
 
-<script type="text/template" id="tmpl-wcfp-schedule-row">
+<script type="text/template" id="tmpl-wcfp-installment-row">
     <tr>
         <td>
             <?php esc_html_e('Payment', 'wc-flex-pay'); ?> {{data.number}}
-            <input type="hidden" name="wcfp_schedule[{{data.number}}][installment_number]" value="{{data.number}}">
+            <input type="hidden" name="wcfp_installments[{{data.number}}][number]" value="{{data.number}}">
         </td>
         <td>
             <input type="number" 
-                   name="wcfp_schedule[{{data.number}}][amount]" 
+                   name="wcfp_installments[{{data.number}}][amount]" 
                    value="" 
                    step="0.01"
                    min="0"
@@ -114,12 +111,12 @@ $enabled = $product->get_meta('_wcfp_enabled');
         </td>
         <td>
             <input type="date" 
-                   name="wcfp_schedule[{{data.number}}][due_date]" 
+                   name="wcfp_installments[{{data.number}}][due_date]" 
                    value="" 
                    required>
         </td>
         <td>
-            <button type="button" class="button remove-schedule">
+            <button type="button" class="button remove-installment">
                 <?php esc_html_e('Remove', 'wc-flex-pay'); ?>
             </button>
         </td>
@@ -138,17 +135,18 @@ jQuery(function($) {
         }
     });
 
-    // Add new schedule row
-    $('.add-schedule').on('click', function() {
-        var template = wp.template('wcfp-schedule-row');
+    // Add new installment row
+    $('.add-installment').on('click', function() {
+        var template = wp.template('wcfp-installment-row');
         var $tbody = $(this).closest('table').find('tbody');
         var number = $tbody.children().length + 1;
         
         $tbody.append(template({ number: number }));
+        updateTotalAmount();
     });
 
-    // Remove schedule row
-    $(document).on('click', '.remove-schedule', function() {
+    // Remove installment row
+    $(document).on('click', '.remove-installment', function() {
         $(this).closest('tr').remove();
         
         // Update installment numbers
@@ -156,28 +154,27 @@ jQuery(function($) {
             var number = index + 1;
             $(this).find('td:first-child').html(
                 '<?php esc_html_e('Payment', 'wc-flex-pay'); ?> ' + number +
-                '<input type="hidden" name="wcfp_schedule[' + number + '][installment_number]" value="' + number + '">'
+                '<input type="hidden" name="wcfp_installments[' + number + '][number]" value="' + number + '">'
             );
             
             // Update input names
-            $(this).find('input[name*="[amount]"]').attr('name', 'wcfp_schedule[' + number + '][amount]');
-            $(this).find('input[name*="[due_date]"]').attr('name', 'wcfp_schedule[' + number + '][due_date]');
+            $(this).find('input[name*="[amount]"]').attr('name', 'wcfp_installments[' + number + '][amount]');
+            $(this).find('input[name*="[due_date]"]').attr('name', 'wcfp_installments[' + number + '][due_date]');
         });
         
-        // Update regular price after removing row
-        updateRegularPrice();
+        updateTotalAmount();
     });
 
-    // Update regular price when installment amounts change
-    $(document).on('change', 'input[name^="wcfp_schedule"][name$="[amount]"]', function() {
-        updateRegularPrice();
+    // Update total amount when installment amounts change
+    $(document).on('change', 'input[name^="wcfp_installments"][name$="[amount]"]', function() {
+        updateTotalAmount();
     });
 
-    // Function to update regular price
-    function updateRegularPrice() {
+    // Function to update total amount
+    function updateTotalAmount() {
         var total = 0;
         $('.flex-pay-schedule tbody tr').each(function() {
-            var amount = parseFloat($(this).find('input[name^="wcfp_schedule"][name$="[amount]"]').val()) || 0;
+            var amount = parseFloat($(this).find('input[name^="wcfp_installments"][name$="[amount]"]').val()) || 0;
             total += amount;
         });
         $('#_regular_price').val(total.toFixed(2));

@@ -1,29 +1,13 @@
 @use "../abstracts/variables" as *;
 
-.wcfp-order-payments {
-    margin: $spacing-xxl 0;
-
-    h2 {
-        margin-bottom: $spacing-xl;
-        color: $color-text-primary;
-        font-size: $font-size-xl;
-    }
-
-    h3 {
-        margin: $spacing-xl 0 $spacing-lg;
-        color: $color-text-primary;
-        font-size: $font-size-lg;
-        padding-bottom: $spacing-sm;
-        border-bottom: 1px solid $color-border;
-    }
-}
-
-.wcfp-payment-schedule {
+.wcfp-table {
     width: 100%;
     margin-bottom: $spacing-lg;
     border: 1px solid $color-border;
     border-radius: $border-radius-lg;
     background: $color-background;
+    border-collapse: separate;
+    border-spacing: 0;
 
     thead {
         background: $color-background-light;
@@ -34,6 +18,14 @@
             color: $color-text-primary;
             text-align: left;
             border-bottom: 2px solid $color-border;
+
+            &:first-child {
+                border-top-left-radius: $border-radius-lg;
+            }
+
+            &:last-child {
+                border-top-right-radius: $border-radius-lg;
+            }
         }
     }
 
@@ -53,43 +45,36 @@
         td {
             padding: $spacing-md;
             color: $color-text-secondary;
+
+            &:first-child {
+                font-weight: $font-weight-medium;
+            }
         }
     }
 
+    // Status variations
     &.completed {
-        tbody {
-            tr {
-                &:hover {
-                    background: rgba($color-success, 0.05);
-                }
-            }
+        tbody tr:hover {
+            background: rgba($color-success, 0.05);
         }
     }
 
-    &.upcoming {
-        tbody {
-            tr {
-                &:hover {
-                    background: rgba($color-warning, 0.05);
-                }
-            }
+    &.pending {
+        tbody tr:hover {
+            background: rgba($color-warning, 0.05);
+        }
+    }
+
+    &.failed {
+        tbody tr:hover {
+            background: rgba($color-error, 0.05);
         }
     }
 }
 
-.wcfp-payment-notice {
-    margin-top: $spacing-lg;
-    padding: $spacing-md;
-    background: rgba($color-notice-info-bg, 0.5);
-    border: 1px solid $color-notice-info-border;
-    border-radius: $border-radius-md;
-    color: $color-text-secondary;
-    font-size: $font-size-sm;
-    line-height: 1.5;
-}
-
+// Responsive tables
 @media (max-width: $breakpoint-tablet) {
-    .wcfp-payment-schedule {
+    .wcfp-table {
         display: block;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
@@ -125,14 +110,12 @@
                 white-space: nowrap;
                 font-weight: $font-weight-bold;
                 color: $color-text-primary;
+                content: attr(data-label);
             }
 
-            // Add labels
-            &:nth-of-type(1):before { content: attr(data-label); }
-            &:nth-of-type(2):before { content: attr(data-label); }
-            &:nth-of-type(3):before { content: attr(data-label); }
-            &:nth-of-type(4):before { content: attr(data-label); }
-            &:nth-of-type(5):before { content: attr(data-label); }
+            &:last-child {
+                border-bottom: none;
+            }
         }
     }
 }

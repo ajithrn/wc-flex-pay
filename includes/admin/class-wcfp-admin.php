@@ -24,6 +24,21 @@ class Admin {
     }
 
     /**
+     * Order note icons
+     *
+     * @var array
+     */
+    private $note_icons = array(
+        'payment' => '💰',
+        'email' => '📧',
+        'order' => '📦',
+        'system' => 'ℹ️',
+        'warning' => '⚠️',
+        'error' => '❌',
+        'success' => '✅'
+    );
+
+    /**
      * Initialize hooks
      */
     private function init_hooks() {
@@ -43,6 +58,7 @@ class Admin {
         
         // Order meta box
         add_action('add_meta_boxes', array($this, 'add_order_meta_box'));
+        add_action('woocommerce_order_item_add_action_buttons', array($this, 'add_order_item_actions'));
         
         // Admin notices
         add_action('admin_notices', array($this, 'admin_notices'));
@@ -51,6 +67,12 @@ class Admin {
         add_action('wp_ajax_wcfp_process_payment', array($this, 'ajax_process_payment'));
         add_action('wp_ajax_wcfp_update_schedule', array($this, 'ajax_update_schedule'));
         add_action('wp_ajax_wcfp_bulk_edit_schedules', array($this, 'ajax_bulk_edit_schedules'));
+        add_action('wp_ajax_wcfp_create_sub_order', array($this, 'ajax_create_sub_order'));
+        
+        // Order list customization
+        add_filter('manage_edit-shop_order_columns', array($this, 'add_order_list_columns'));
+        add_action('manage_shop_order_posts_custom_column', array($this, 'render_order_list_columns'));
+        add_filter('woocommerce_admin_order_preview_actions', array($this, 'add_order_preview_actions'), 10, 2);
     }
 
     /**
@@ -73,11 +95,29 @@ class Admin {
     public function enqueue_scripts() {
         $screen = get_current_screen();
 
-        // Only enqueue on our pages
-        if (strpos($screen->id, 'wc-flex-pay') === false) {
+        // Only enqueue on relevant pages
+        $allowed_screens = array(
+            'wc-flex-pay',          // Plugin pages
+            'product',              // Product edit page
+            'edit-product',         // Products list
+            'shop_order',           // Order edit page
+            'edit-shop_order',      // Orders list
+            'woocommerce_page_wc-settings' // WooCommerce settings
+        );
+
+        $is_allowed = false;
+        foreach ($allowed_screens as $allowed_screen) {
+            if (strpos($screen->id, $allowed_screen) !== false) {
+                $is_allowed = true;
+                break;
+            }
+        }
+
+        if (!$is_allowed) {
             return;
         }
 
+        // Enqueue styles
         wp_enqueue_style(
             'wcfp-admin',
             WCFP_PLUGIN_URL . 'assets/css/admin.css',
@@ -85,14 +125,16 @@ class Admin {
             WCFP_VERSION
         );
 
+        // Enqueue scripts
         wp_enqueue_script(
             'wcfp-admin',
             WCFP_PLUGIN_URL . 'assets/js/admin.js',
-            array('jquery', 'jquery-ui-datepicker'),
+            array('jquery', 'jquery-ui-datepicker', 'wp-util'),
             WCFP_VERSION,
             true
         );
 
+        // Localize script
         wp_localize_script(
             'wcfp-admin',
             'wcfp_admin_params',
@@ -103,8 +145,26 @@ class Admin {
                     'confirm_process' => __('Are you sure you want to process this payment?', 'wc-flex-pay'),
                     'confirm_update'  => __('Are you sure you want to update this schedule?', 'wc-flex-pay'),
                     'error'          => __('An error occurred. Please try again.', 'wc-flex-pay'),
+                    'confirm_delete' => __('Are you sure you want to delete this installment?', 'wc-flex-pay'),
+                    'no_installments' => __('Please add at least one installment.', 'wc-flex-pay'),
+                    'invalid_amount' => __('Please enter a valid amount.', 'wc-flex-pay'),
+                    'invalid_date' => __('Please enter a valid date.', 'wc-flex-pay'),
                 ),
+                'currency_symbol' => get_woocommerce_currency_symbol(),
+                'currency_pos' => get_option('woocommerce_currency_pos'),
+                'decimal_sep' => wc_get_price_decimal_separator(),
+                'thousand_sep' => wc_get_price_thousand_separator(),
+                'decimals' => wc_get_price_decimals(),
+                'date_format' => get_option('date_format'),
             )
+        );
+
+        // Add jQuery UI styles for datepicker
+        wp_enqueue_style(
+            'jquery-ui-style',
+            WCFP_PLUGIN_URL . 'assets/css/jquery-ui.min.css',
+            array(),
+            WCFP_VERSION
         );
     }
 
@@ -167,6 +227,7 @@ class Admin {
      * Add order meta box
      */
     public function add_order_meta_box() {
+        // Parent order meta box
         add_meta_box(
             'wcfp-order-payments',
             __('Flex Pay Payments', 'wc-flex-pay'),
@@ -175,6 +236,174 @@ class Admin {
             'normal',
             'high'
         );
+
+        // Sub-order meta box
+        add_meta_box(
+            'wcfp-sub-order-info',
+            __('Flex Pay Sub-order Information', 'wc-flex-pay'),
+            array($this, 'render_sub_order_meta_box'),
+            'shop_order',
+            'side',
+            'high'
+        );
+    }
+
+    /**
+     * Add order item actions
+     *
+     * @param WC_Order $order Order object
+     */
+    public function add_order_item_actions($order) {
+        // Only show for parent orders
+        if ($order->get_meta('_wcfp_parent_order')) {
+            return;
+        }
+
+        $payments = $this->get_order_payments($order->get_id());
+        if (empty($payments)) {
+            return;
+        }
+
+        ?>
+        <button type="button" 
+                class="button create-sub-order" 
+                data-order-id="<?php echo esc_attr($order->get_id()); ?>"
+                data-nonce="<?php echo wp_create_nonce('wcfp-admin'); ?>">
+            <?php esc_html_e('Create Sub-order', 'wc-flex-pay'); ?>
+        </button>
+        <?php
+    }
+
+    /**
+     * Add columns to order list
+     *
+     * @param array $columns Existing columns
+     * @return array Modified columns
+     */
+    public function add_order_list_columns($columns) {
+        $new_columns = array();
+        
+        foreach ($columns as $key => $column) {
+            $new_columns[$key] = $column;
+            
+            if ($key === 'order_status') {
+                $new_columns['wcfp_info'] = __('Flex Pay', 'wc-flex-pay');
+            }
+        }
+        
+        return $new_columns;
+    }
+
+    /**
+     * Render order list columns
+     *
+     * @param string $column Column name
+     */
+    public function render_order_list_columns($column) {
+        global $post;
+        
+        if ($column === 'wcfp_info') {
+            $order = wc_get_order($post->ID);
+            if (!$order) {
+                return;
+            }
+
+            // Check if this is a sub-order
+            $parent_id = $order->get_meta('_wcfp_parent_order');
+            if ($parent_id) {
+                $installment = $order->get_meta('_wcfp_installment_number');
+                printf(
+                    '<span class="wcfp-sub-order-badge">%s</span>',
+                    sprintf(
+                        /* translators: 1: parent order number, 2: installment number */
+                        esc_html__('Sub-order of #%1$s (Installment %2$d)', 'wc-flex-pay'),
+                        esc_html($parent_id),
+                        esc_html($installment)
+                    )
+                );
+                return;
+            }
+
+            // Show Flex Pay info for parent orders
+            $payments = $this->get_order_payments($order->get_id());
+            if (!empty($payments)) {
+                $completed = 0;
+                $total = count($payments);
+                
+                foreach ($payments as $payment) {
+                    if ($payment['status'] === 'completed') {
+                        $completed++;
+                    }
+                }
+
+                printf(
+                    '<span class="wcfp-payments-badge">%s</span>',
+                    sprintf(
+                        /* translators: 1: completed payments, 2: total payments */
+                        esc_html__('%1$d/%2$d payments', 'wc-flex-pay'),
+                        esc_html($completed),
+                        esc_html($total)
+                    )
+                );
+            }
+        }
+    }
+
+    /**
+     * Add actions to order preview
+     *
+     * @param array    $actions Existing actions
+     * @param WC_Order $order   Order object
+     * @return array Modified actions
+     */
+    public function add_order_preview_actions($actions, $order) {
+        $parent_id = $order->get_meta('_wcfp_parent_order');
+        if ($parent_id) {
+            $actions['view_parent'] = array(
+                'url' => admin_url('post.php?post=' . $parent_id . '&action=edit'),
+                'name' => __('View Parent Order', 'wc-flex-pay')
+            );
+        }
+        return $actions;
+    }
+
+    /**
+     * Create sub-order via AJAX
+     */
+    public function ajax_create_sub_order() {
+        check_ajax_referer('wcfp-admin', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission denied.', 'wc-flex-pay'));
+        }
+
+        $order_id = isset($_POST['order_id']) ? absint($_POST['order_id']) : 0;
+        if (!$order_id) {
+            wp_send_json_error(__('Invalid order ID.', 'wc-flex-pay'));
+        }
+
+        try {
+            $order = wc_get_order($order_id);
+            if (!$order) {
+                throw new \Exception(__('Order not found.', 'wc-flex-pay'));
+            }
+
+            $payment_manager = new \WCFP\Payment();
+            $next_payment = $payment_manager->get_next_pending_payment($order_id);
+            if (!$next_payment) {
+                throw new \Exception(__('No pending payments found.', 'wc-flex-pay'));
+            }
+
+            // Create sub-order
+            $sub_order = $payment_manager->create_sub_order($order, $next_payment);
+            
+            wp_send_json_success(array(
+                'message' => __('Sub-order created successfully.', 'wc-flex-pay'),
+                'redirect' => admin_url('post.php?post=' . $sub_order->get_id() . '&action=edit')
+            ));
+        } catch (\Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
     }
 
     /**
@@ -187,6 +416,23 @@ class Admin {
         }
 
         include WCFP_PLUGIN_DIR . 'templates/admin/order-meta-box.php';
+    }
+
+    /**
+     * Render sub-order meta box
+     */
+    public function render_sub_order_meta_box($post) {
+        $order = wc_get_order($post->ID);
+        if (!$order) {
+            return;
+        }
+
+        // Only show for sub-orders
+        if (!$order->get_meta('_wcfp_parent_order')) {
+            return;
+        }
+
+        include WCFP_PLUGIN_DIR . 'templates/admin/sub-order-meta-box.php';
     }
 
     /**

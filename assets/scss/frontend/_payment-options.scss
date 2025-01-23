@@ -19,35 +19,53 @@
 
 .wcfp-payment-options {
   display: flex;
+  flex-direction: column;
   gap: $spacing-md;
 }
 
 .wcfp-payment-option {
-  flex: 1;
-
   label {
     display: flex;
     align-items: center;
     gap: $spacing-sm;
-    padding: $spacing-md;
+    padding: $spacing-lg;
     border: 1px solid $color-border;
     border-radius: $border-radius-md;
     cursor: pointer;
     transition: $transition-default;
 
     &:hover {
-      background: $color-background-light;
+      border-color: $color-primary;
     }
   }
 
   input[type="radio"] {
     margin: 0;
   }
+
+  &.selected label {
+    border-color: $color-primary;
+    background: rgba($color-primary, 0.05);
+  }
 }
 
 .wcfp-option-label {
-  font-weight: $font-weight-medium;
+  flex: 1;
+  font-weight: $font-weight-bold;
   color: $color-text-primary;
+}
+
+.wcfp-option-amount {
+  color: $color-primary;
+  font-weight: $font-weight-medium;
+  text-align: right;
+
+  small {
+    display: block;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+    font-weight: normal;
+  }
 }
 
 @media (max-width: $breakpoint-tablet) {

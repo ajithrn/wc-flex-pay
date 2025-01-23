@@ -1,30 +1,80 @@
 @use "../abstracts/variables" as *;
 
+// Status badges for general use
 .wcfp-status {
-  display: inline-block;
-  padding: 3px $spacing-sm;
-  border-radius: $border-radius-sm;
-  font-size: $font-size-sm;
-  font-weight: $font-weight-medium;
-  text-transform: capitalize;
+    display: inline-block;
+    padding: $spacing-xs $spacing-sm;
+    border-radius: $border-radius-sm;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    text-transform: capitalize;
+    line-height: 1.4;
 
-  &.pending {
-    background: $color-status-pending-bg;
-    color: $color-status-pending-text;
-  }
+    &.pending {
+        background: $color-status-pending-bg;
+        color: $color-status-pending-text;
+    }
 
-  &.completed {
-    background: $color-status-completed-bg;
-    color: $color-status-completed-text;
-  }
+    &.completed {
+        background: $color-status-completed-bg;
+        color: $color-status-completed-text;
+    }
 
-  &.overdue {
-    background: $color-status-overdue-bg;
-    color: $color-status-overdue-text;
-  }
+    &.overdue {
+        background: $color-status-overdue-bg;
+        color: $color-status-overdue-text;
+    }
 
-  &.failed {
-    background: $color-status-failed-bg;
-    color: $color-status-failed-text;
-  }
+    &.failed {
+        background: $color-status-failed-bg;
+        color: $color-status-failed-text;
+    }
+
+    &.processing {
+        background: $color-status-processing-bg;
+        color: $color-status-processing-text;
+    }
+}
+
+// Status badges specifically for payment status
+.wcfp-payment-status {
+    @extend .wcfp-status;
+    min-width: 80px;
+    text-align: center;
+}
+
+// Status badges for installments
+.wcfp-installment-status {
+    @extend .wcfp-status;
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-xs;
+
+    &::before {
+        content: '';
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    &.pending::before {
+        background-color: $color-status-pending-text;
+    }
+
+    &.completed::before {
+        background-color: $color-status-completed-text;
+    }
+
+    &.overdue::before {
+        background-color: $color-status-overdue-text;
+    }
+
+    &.failed::before {
+        background-color: $color-status-failed-text;
+    }
+
+    &.processing::before {
+        background-color: $color-status-processing-text;
+    }
 }

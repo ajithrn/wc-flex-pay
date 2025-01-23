@@ -113,48 +113,56 @@ class Product {
         $product->update_meta_data('_wcfp_enabled', $enabled);
 
         if ($enabled === 'yes') {
-            if (!isset($_POST['wcfp_schedule']) || !is_array($_POST['wcfp_schedule'])) {
-                $this->add_notice(__('No payment schedule provided.', 'wc-flex-pay'));
+            if (!isset($_POST['wcfp_installments']) || !is_array($_POST['wcfp_installments'])) {
+                $this->add_notice(__('No installments provided.', 'wc-flex-pay'));
                 return;
             }
 
             try {
-                $schedules = array();
+                $installments = array();
                 
-                if (is_array($_POST['wcfp_schedule'])) {
-                    foreach ($_POST['wcfp_schedule'] as $schedule) {
-                        if (empty($schedule['amount']) || empty($schedule['due_date']) || 
-                            (isset($schedule['installment_number']) && $schedule['installment_number'] === '0')) {
+                if (is_array($_POST['wcfp_installments'])) {
+                    foreach ($_POST['wcfp_installments'] as $installment) {
+                        if (empty($installment['amount']) || empty($installment['due_date']) || 
+                            (isset($installment['number']) && $installment['number'] === '0')) {
                             continue;
                         }
                         
-                        $schedules[] = array(
-                            'amount' => wc_clean($schedule['amount']),
-                            'due_date' => wc_clean($schedule['due_date']),
-                            'description' => isset($schedule['description']) ? wc_clean($schedule['description']) : '',
+                        $installments[] = array(
+                            'number' => absint($installment['number']),
+                            'amount' => wc_clean($installment['amount']),
+                            'due_date' => wc_clean($installment['due_date']),
+                            'status' => 'pending'
                         );
                     }
                 }
 
-                if (empty($schedules)) {
-                    throw new \Exception(__('At least one payment schedule is required.', 'wc-flex-pay'));
+                if (empty($installments)) {
+                    throw new \Exception(__('At least one installment is required.', 'wc-flex-pay'));
                 }
 
-                usort($schedules, function($a, $b) {
+                usort($installments, function($a, $b) {
                     return strtotime($a['due_date']) - strtotime($b['due_date']);
                 });
 
-                $number = 1;
-                foreach ($schedules as &$schedule) {
-                    $schedule['installment_number'] = $number++;
-                }
+                $validated_installments = $this->validate_installments($installments);
+                
+                // Create payment data structure
+                $payments = array(
+                    'installments' => $validated_installments,
+                    'summary' => array(
+                        'total_installments' => count($validated_installments),
+                        'paid_installments' => 0,
+                        'total_amount' => $this->calculate_total_price($validated_installments),
+                        'paid_amount' => 0,
+                        'next_due_date' => $validated_installments[0]['due_date']
+                    )
+                );
 
-                $validated_schedules = $this->validate_schedules($schedules);
-                $this->save_payment_schedules($post_id, $validated_schedules);
+                $this->save_payment_data($post_id, $payments);
 
-                $total = $this->calculate_total_price($validated_schedules);
-                $product->set_regular_price($total);
-                $product->set_price($total); // Also set the current price
+                $product->set_regular_price($payments['summary']['total_amount']);
+                $product->set_price($payments['summary']['total_amount']); // Also set the current price
                 $product->save();
 
                 // Force WooCommerce to refresh its price cache
@@ -167,13 +175,60 @@ class Product {
             }
         } else {
             try {
-                $this->save_payment_schedules($post_id, array());
+                $this->save_payment_data($post_id, array());
             } catch (\Exception $e) {
                 error_log('WC Flex Pay Error: ' . $e->getMessage());
             }
         }
 
         $product->save();
+    }
+
+    /**
+     * Validate installments
+     */
+    private function validate_installments($installments) {
+        $validated = array();
+        $last_date = null;
+
+        foreach ($installments as $installment) {
+            $amount = wc_format_decimal($installment['amount']);
+            if (!is_numeric($amount) || $amount <= 0) {
+                throw new \Exception(__('Amount must be a valid number greater than 0.', 'wc-flex-pay'));
+            }
+
+            $due_date = sanitize_text_field($installment['due_date']);
+            if (!$due_date || !strtotime($due_date)) {
+                throw new \Exception(__('Invalid due date format.', 'wc-flex-pay'));
+            }
+
+            if ($last_date && strtotime($due_date) <= strtotime($last_date)) {
+                throw new \Exception(__('Due dates must be in chronological order.', 'wc-flex-pay'));
+            }
+
+            $validated[] = array(
+                'number' => absint($installment['number']),
+                'amount' => $amount,
+                'due_date' => $due_date,
+                'status' => 'pending',
+                'logs' => array()
+            );
+
+            $last_date = $due_date;
+        }
+
+        if (empty($validated)) {
+            throw new \Exception(__('At least one valid installment is required.', 'wc-flex-pay'));
+        }
+
+        return $validated;
+    }
+
+    /**
+     * Save payment data
+     */
+    private function save_payment_data($product_id, $payments) {
+        update_post_meta($product_id, '_wcfp_payments', $payments);
     }
 
     /**
@@ -283,16 +338,26 @@ class Product {
             return;
         }
 
-        $schedules = $this->get_payment_schedules($product->get_id());
-        if (empty($schedules)) {
+        $payments = get_post_meta($product->get_id(), '_wcfp_payments', true);
+        if (empty($payments) || empty($payments['installments'])) {
             return;
+        }
+
+        // Add form start/end if needed
+        $form_start = '';
+        $form_end = '';
+        if (!has_action('woocommerce_before_add_to_cart_button', array($this, 'display_payment_schedule'))) {
+            $form_start = '<form class="cart" method="post" enctype="multipart/form-data">';
+            $form_end = '<button type="submit" name="add-to-cart" value="' . esc_attr($product->get_id()) . '" class="single_add_to_cart_button button alt">' . esc_html($product->single_add_to_cart_text()) . '</button></form>';
         }
 
         wc_get_template(
             'single-product/payment-schedule.php',
             array(
-                'product'   => $product,
-                'schedules' => $schedules,
+                'product' => $product,
+                'payments' => $payments,
+                'form_start' => $form_start,
+                'form_end' => $form_end,
             ),
             '',
             WCFP_PLUGIN_DIR . 'templates/'
@@ -363,48 +428,46 @@ class Product {
         }
 
         $quantity = $cart_item['quantity'];
-        if ($cart_item['wcfp_payment_type'] === 'installment') {
-            $schedules = $this->get_payment_schedules($product->get_id());
+        if ($cart_item['wcfp_payment_type'] === 'installment' && isset($cart_item['wcfp_payments'])) {
+            $payments = $cart_item['wcfp_payments'];
             $current_date = current_time('Y-m-d');
-            $future_payments = 0;
+            $future_installments = array();
             $pending_amount = 0;
             
-            foreach ($schedules as $schedule) {
-                if (strtotime($schedule['due_date']) > strtotime($current_date)) {
-                    $future_payments++;
-                    $pending_amount += $schedule['amount'];
+            foreach ($payments['installments'] as $installment) {
+                if (strtotime($installment['due_date']) > strtotime($current_date)) {
+                    $future_installments[] = $installment;
+                    $pending_amount += $installment['amount'];
                 }
             }
             
             $pending_amount *= $quantity;
+            $initial_amount = $cart_item['wcfp_initial_payment'] * $quantity;
             
-            $output = wc_price($cart_item['wcfp_initial_payment'] * $quantity);
+            $output = '<div class="wcfp-subtotal-breakdown">';
+            $output .= '<div class="wcfp-initial-payment">' . wc_price($initial_amount) . '</div>';
             
-            if ($future_payments > 0) {
-                $output .= '<br><small>' . sprintf(
-                    __('Pay %s later', 'wc-flex-pay'),
+            if (!empty($future_installments)) {
+                $output .= '<div class="wcfp-pending-payment">';
+                $output .= '<small class="wcfp-pending-amount">' . sprintf(
+                    /* translators: %s: pending amount */
+                    __('+ %s in installments', 'wc-flex-pay'),
                     wc_price($pending_amount)
                 ) . '</small>';
                 
-                // Add upcoming payment details
-                $current_date = current_time('Y-m-d');
-                $next_payment = null;
-                foreach ($schedules as $schedule) {
-                    if (strtotime($schedule['due_date']) > strtotime($current_date)) {
-                        $next_payment = $schedule;
-                        break;
-                    }
-                }
-                
-                if ($next_payment) {
-                    $output .= '<br><small>' . sprintf(
-                        __('Next payment: %s on %s', 'wc-flex-pay'),
-                        wc_price($next_payment['amount'] * $quantity),
-                        date_i18n(get_option('date_format'), strtotime($next_payment['due_date']))
-                    ) . '</small>';
-                }
+                // Add next payment info
+                $next_installment = reset($future_installments);
+                $output .= '<small class="wcfp-next-payment">' . sprintf(
+                    /* translators: 1: installment number, 2: amount, 3: date */
+                    __('Next: Installment %1$d - %2$s on %3$s', 'wc-flex-pay'),
+                    $next_installment['number'],
+                    wc_price($next_installment['amount'] * $quantity),
+                    date_i18n(get_option('date_format'), strtotime($next_installment['due_date']))
+                ) . '</small>';
+                $output .= '</div>';
             }
             
+            $output .= '</div>';
             return $output;
         }
 
@@ -417,31 +480,40 @@ class Product {
     public function display_cart_installment_notice() {
         $cart = WC()->cart;
         $has_installments = false;
+        $total_pending = 0;
         $upcoming_payments = array();
 
         foreach ($cart->get_cart() as $cart_item) {
-            if (isset($cart_item['wcfp_payment_type']) && $cart_item['wcfp_payment_type'] === 'installment') {
+            if (isset($cart_item['wcfp_payment_type']) && $cart_item['wcfp_payment_type'] === 'installment' && isset($cart_item['wcfp_payments'])) {
                 $product = $cart_item['data'];
-                $schedules = $this->get_payment_schedules($product->get_id());
+                $payments = $cart_item['wcfp_payments'];
                 
-                if (!empty($schedules)) {
+                if (!empty($payments['installments'])) {
                     $has_installments = true;
                     $quantity = $cart_item['quantity'];
+                    $current_date = current_time('Y-m-d');
                     
-                    // Skip first payment as it's paid at checkout
-                    array_shift($schedules);
-                    
-                    foreach ($schedules as $index => $schedule) {
-                        $payment_number = $index + 2; // +2 because first payment is initial and index starts at 0
-                        $date = date_i18n(get_option('date_format'), strtotime($schedule['due_date']));
-                        
-                        if (!isset($upcoming_payments[$date])) {
-                            $upcoming_payments[$date] = array(
-                                'amount' => 0,
-                                'number' => $payment_number
+                    foreach ($payments['installments'] as $installment) {
+                        if (strtotime($installment['due_date']) > strtotime($current_date)) {
+                            $date = date_i18n(get_option('date_format'), strtotime($installment['due_date']));
+                            
+                            if (!isset($upcoming_payments[$date])) {
+                                $upcoming_payments[$date] = array(
+                                    'amount' => 0,
+                                    'installments' => array()
+                                );
+                            }
+                            
+                            $amount = $installment['amount'] * $quantity;
+                            $upcoming_payments[$date]['amount'] += $amount;
+                            $total_pending += $amount;
+                            
+                            $upcoming_payments[$date]['installments'][] = array(
+                                'number' => $installment['number'],
+                                'product_name' => $product->get_name(),
+                                'amount' => $amount
                             );
                         }
-                        $upcoming_payments[$date]['amount'] += $schedule['amount'] * $quantity;
                     }
                 }
             }
@@ -451,20 +523,36 @@ class Product {
             echo '<tr class="wcfp-installment-notice">
                 <td colspan="2">
                     <div class="woocommerce-info">
-                        <h4>' . esc_html__('Upcoming Payments', 'wc-flex-pay') . '</h4>
-                        <ul>';
+                        <h4>' . sprintf(
+                            /* translators: %s: total pending amount */
+                            esc_html__('Upcoming Payments (Total: %s)', 'wc-flex-pay'),
+                            wc_price($total_pending)
+                        ) . '</h4>
+                        <div class="wcfp-payment-timeline">';
             
+            ksort($upcoming_payments);
             foreach ($upcoming_payments as $date => $payment) {
-                echo '<li>' . sprintf(
-                    /* translators: 1: payment number, 2: date, 3: amount */
-                    esc_html__('Payment %1$d: %2$s - %3$s', 'wc-flex-pay'),
-                    $payment['number'],
-                    $date,
-                    wc_price($payment['amount'])
-                ) . '</li>';
+                echo '<div class="wcfp-payment-date">
+                    <div class="wcfp-date-header">
+                        <strong>' . esc_html($date) . '</strong>
+                        <span class="wcfp-total">' . wc_price($payment['amount']) . '</span>
+                    </div>
+                    <ul class="wcfp-installment-list">';
+                
+                foreach ($payment['installments'] as $installment) {
+                    echo '<li>' . sprintf(
+                        /* translators: 1: product name, 2: installment number, 3: amount */
+                        esc_html__('%1$s (Installment %2$d) - %3$s', 'wc-flex-pay'),
+                        esc_html($installment['product_name']),
+                        $installment['number'],
+                        wc_price($installment['amount'])
+                    ) . '</li>';
+                }
+                
+                echo '</ul></div>';
             }
             
-            echo '</ul></div></td></tr>';
+            echo '</div></div></td></tr>';
         }
     }
 
@@ -486,39 +574,39 @@ class Product {
 
         if (isset($_POST['wcfp_payment_type'])) {
             $payment_type = sanitize_text_field($_POST['wcfp_payment_type']);
-            $schedules = $this->get_payment_schedules($product_id);
+            $payments = get_post_meta($product_id, '_wcfp_payments', true);
             
-            if (empty($schedules)) {
+            if (empty($payments) || empty($payments['installments'])) {
                 return $cart_item_data;
             }
 
             $cart_item_data['wcfp_payment_type'] = $payment_type;
-            $cart_item_data['wcfp_schedules'] = $schedules;
+            $cart_item_data['wcfp_payments'] = $payments;
             
             if ($payment_type === 'installment') {
                 // Calculate initial payment including past due amounts
                 $initial_payment = 0;
                 $current_date = current_time('Y-m-d');
                 
-                foreach ($schedules as $schedule) {
-                    if (strtotime($schedule['due_date']) <= strtotime($current_date)) {
+                foreach ($payments['installments'] as $installment) {
+                    if (strtotime($installment['due_date']) <= strtotime($current_date)) {
                         // Add past due and current payments to initial payment
-                        $initial_payment += $schedule['amount'];
+                        $initial_payment += $installment['amount'];
                     } else {
                         break; // Stop once we hit future payments
                     }
                 }
                 
                 // If no payments are due yet, use first payment as initial
-                if ($initial_payment === 0 && !empty($schedules)) {
-                    $initial_payment = $schedules[0]['amount'];
+                if ($initial_payment === 0 && !empty($payments['installments'])) {
+                    $initial_payment = $payments['installments'][0]['amount'];
                 }
                 
                 $cart_item_data['wcfp_initial_payment'] = $initial_payment;
-                $cart_item_data['wcfp_total_price'] = $this->calculate_total_price($schedules);
+                $cart_item_data['wcfp_total_price'] = $payments['summary']['total_amount'];
             } else {
-                $cart_item_data['wcfp_initial_payment'] = $this->calculate_total_price($schedules);
-                $cart_item_data['wcfp_total_price'] = $this->calculate_total_price($schedules);
+                $cart_item_data['wcfp_initial_payment'] = $payments['summary']['total_amount'];
+                $cart_item_data['wcfp_total_price'] = $payments['summary']['total_amount'];
             }
         }
         return $cart_item_data;
@@ -547,20 +635,21 @@ class Product {
             );
 
             // Add payment schedule if there are future payments
-            if (isset($cart_item['wcfp_schedules'])) {
-                $schedules = $cart_item['wcfp_schedules'];
+            if (isset($cart_item['wcfp_payments']['installments'])) {
                 $current_date = current_time('Y-m-d');
-                $future_schedules = array_filter($schedules, function($schedule) use ($current_date) {
-                    return strtotime($schedule['due_date']) > strtotime($current_date);
+                $future_installments = array_filter($cart_item['wcfp_payments']['installments'], function($installment) use ($current_date) {
+                    return strtotime($installment['due_date']) > strtotime($current_date);
                 });
 
-                if (!empty($future_schedules)) {
+                if (!empty($future_installments)) {
                     $schedule_rows = array();
-                    foreach ($future_schedules as $schedule) {
+                    foreach ($future_installments as $installment) {
                         $schedule_rows[] = sprintf(
-                            '%s: &nbsp;&nbsp; %s',
-                            date_i18n(get_option('date_format'), strtotime($schedule['due_date'])),
-                            wc_price($schedule['amount'])
+                            /* translators: %1$d: installment number, %2$s: formatted date, %3$s: amount */
+                            __('Installment %1$d: %2$s - %3$s', 'wc-flex-pay'),
+                            $installment['number'],
+                            date_i18n(get_option('date_format'), strtotime($installment['due_date'])),
+                            wc_price($installment['amount'])
                         );
                     }
                     $schedule_html = implode("\n", $schedule_rows);
@@ -607,36 +696,78 @@ class Product {
      */
     public function add_future_payments_note($order_id, $posted_data, $order) {
         $has_installments = false;
+        $total_pending = 0;
         $future_payments = array();
 
         foreach ($order->get_items() as $item) {
             $product = $item->get_product();
             if ($this->is_flex_pay_enabled($product)) {
-                $schedules = $this->get_payment_schedules($product->get_id());
-                if (!empty($schedules)) {
+                $payments = get_post_meta($product->get_id(), '_wcfp_payments', true);
+                if (!empty($payments['installments'])) {
                     $has_installments = true;
-                    // Skip first payment as it's paid at checkout
-                    array_shift($schedules);
-                    foreach ($schedules as $schedule) {
-                        $date = date_i18n(get_option('date_format'), strtotime($schedule['due_date']));
-                        if (!isset($future_payments[$date])) {
-                            $future_payments[$date] = 0;
+                    $quantity = $item->get_quantity();
+                    $current_date = current_time('Y-m-d');
+                    
+                    foreach ($payments['installments'] as $installment) {
+                        if (strtotime($installment['due_date']) > strtotime($current_date)) {
+                            $date = date_i18n(get_option('date_format'), strtotime($installment['due_date']));
+                            
+                            if (!isset($future_payments[$date])) {
+                                $future_payments[$date] = array(
+                                    'amount' => 0,
+                                    'installments' => array()
+                                );
+                            }
+                            
+                            $amount = $installment['amount'] * $quantity;
+                            $future_payments[$date]['amount'] += $amount;
+                            $total_pending += $amount;
+                            
+                            $future_payments[$date]['installments'][] = array(
+                                'number' => $installment['number'],
+                                'product_name' => $item->get_name(),
+                                'amount' => $amount
+                            );
                         }
-                        $future_payments[$date] += $schedule['amount'] * $item->get_quantity();
                     }
                 }
             }
         }
 
         if ($has_installments) {
-            $note = __('Future Payments Schedule:', 'wc-flex-pay') . "\n";
-            foreach ($future_payments as $date => $amount) {
+            $note = sprintf(
+                /* translators: %s: total pending amount */
+                __('Future Payments Schedule (Total Pending: %s):', 'wc-flex-pay'),
+                wc_price($total_pending)
+            ) . "\n\n";
+
+            ksort($future_payments);
+            foreach ($future_payments as $date => $payment) {
                 $note .= sprintf(
-                    '%s: %s' . "\n",
+                    /* translators: %1$s: date, %2$s: amount */
+                    __('%1$s - Total: %2$s', 'wc-flex-pay') . "\n",
                     $date,
-                    wc_price($amount)
+                    wc_price($payment['amount'])
                 );
+
+                foreach ($payment['installments'] as $installment) {
+                    $note .= sprintf(
+                        /* translators: 1: product name, 2: installment number, 3: amount */
+                        __('  • %1$s (Installment %2$d) - %3$s', 'wc-flex-pay') . "\n",
+                        $installment['product_name'],
+                        $installment['number'],
+                        wc_price($installment['amount'])
+                    );
+                }
+                $note .= "\n";
             }
+
+            // Add payment instructions
+            $note .= __('Payment Instructions:', 'wc-flex-pay') . "\n";
+            $note .= __('• You will receive payment links for each installment via email', 'wc-flex-pay') . "\n";
+            $note .= __('• Each payment must be completed by its due date', 'wc-flex-pay') . "\n";
+            $note .= __('• Payment links can also be found in your account dashboard', 'wc-flex-pay');
+
             $order->add_order_note($note);
         }
     }

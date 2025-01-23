@@ -5,6 +5,10 @@ $color-text-secondary: #666;
 $color-border: #e5e7eb;
 $color-background: #fff;
 $color-background-light: #f8f9fa;
+
+// State Colors
+$color-success: #5b841b;
+$color-warning: #94660c;
 $color-error: #d63638;
 
 // Status Colors
@@ -16,6 +20,8 @@ $color-status-overdue-bg: #eba3a3;
 $color-status-overdue-text: #761919;
 $color-status-failed-bg: #eba3a3;
 $color-status-failed-text: #761919;
+$color-status-processing-bg: #c8d7e1;
+$color-status-processing-text: #2e4453;
 
 // Notice Colors
 $color-notice-warning-bg: #fff3cd;

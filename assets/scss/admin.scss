@@ -1,11 +1,12 @@
 // Import abstracts
 @use "abstracts/variables";
-@use "abstracts/utilities" as *;  // Import utilities globally for easier access
+@use "abstracts/utilities";
 
 // Import components
 @use "components/status-badges";
 @use "components/notices";
 @use "components/email";
+@use "components/tables";
 
 // Import admin-specific styles
 @use "admin/dashboard";
@@ -13,3 +14,4 @@
 @use "admin/payment-history";
 @use "admin/datepicker";
 @use "admin/order-meta-box";
+@use "admin/order-list";

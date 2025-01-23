@@ -1,0 +1,48 @@
+@use "../abstracts/variables" as *;
+
+// Flex Pay column in order list
+.wcfp-sub-order-badge {
+    display: inline-block;
+    padding: $spacing-xs $spacing-sm;
+    background: rgba($color-primary, 0.1);
+    color: $color-primary;
+    border-radius: $border-radius-sm;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    line-height: 1.4;
+}
+
+.wcfp-payments-badge {
+    display: inline-block;
+    padding: $spacing-xs $spacing-sm;
+    background: rgba($color-success, 0.1);
+    color: $color-success;
+    border-radius: $border-radius-sm;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    line-height: 1.4;
+
+    &.has-pending {
+        background: rgba($color-warning, 0.1);
+        color: $color-warning;
+    }
+
+    &.has-overdue {
+        background: rgba($color-error, 0.1);
+        color: $color-error;
+    }
+}
+
+// Order actions
+.order_actions {
+    .create-sub-order {
+        margin-top: $spacing-sm;
+    }
+}
+
+// Responsive styles
+@media screen and (max-width: $breakpoint-tablet) {
+    .column-wcfp_info {
+        display: none;
+    }
+}

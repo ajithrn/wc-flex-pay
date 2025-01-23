@@ -32,10 +32,23 @@ class Payment {
     );
 
     /**
+     * Event types for logging
+     *
+     * @var array
+     */
+    private $event_types = array(
+        'payment'    => '💰',
+        'email'      => '📧',
+        'order'      => '📦',
+        'system'     => 'ℹ️',
+    );
+
+    /**
      * Constructor
      */
     public function __construct() {
         $this->init_hooks();
+        add_action('init', array($this, 'init_payment_url_handler'));
     }
 
     /**
@@ -51,6 +64,143 @@ class Payment {
         
         // Admin
         add_action('woocommerce_admin_order_data_after_order_details', array($this, 'display_payment_history'));
+    }
+
+    /**
+     * Initialize payment URL handler
+     */
+    public function init_payment_url_handler() {
+        if (!empty($_GET['wcfp-pay']) && !empty($_GET['installment'])) {
+            add_action('template_redirect', array($this, 'handle_payment_url'));
+        }
+    }
+
+    /**
+     * Handle payment URL
+     */
+    public function handle_payment_url() {
+        $order_id = absint($_GET['wcfp-pay']);
+        $installment_number = absint($_GET['installment']);
+
+        try {
+            // Verify order exists
+            $parent_order = wc_get_order($order_id);
+            if (!$parent_order) {
+                throw new \Exception(__('Invalid order.', 'wc-flex-pay'));
+            }
+
+            // Verify customer
+            if ($parent_order->get_customer_id() !== get_current_user_id()) {
+                throw new \Exception(__('Unauthorized access.', 'wc-flex-pay'));
+            }
+
+            // Get installment details
+            $payments = $this->get_order_payments($order_id);
+            if (empty($payments['installments'][$installment_number - 1])) {
+                throw new \Exception(__('Invalid installment.', 'wc-flex-pay'));
+            }
+
+            $installment = $payments['installments'][$installment_number - 1];
+            if ($installment['status'] === 'completed') {
+                throw new \Exception(__('This installment has already been paid.', 'wc-flex-pay'));
+            }
+
+            // Create sub-order
+            $sub_order = $this->create_sub_order($parent_order, $installment);
+            
+            // Log sub-order creation
+            $this->log_event(
+                $order_id,
+                sprintf(
+                    __('Created sub-order #%s for installment %d', 'wc-flex-pay'),
+                    $sub_order->get_order_number(),
+                    $installment_number
+                ),
+                'order'
+            );
+
+            // Redirect to sub-order checkout
+            wp_redirect($sub_order->get_checkout_payment_url());
+            exit;
+
+        } catch (\Exception $e) {
+            wc_add_notice($e->getMessage(), 'error');
+            wp_redirect(wc_get_page_permalink('myaccount'));
+            exit;
+        }
+    }
+
+    /**
+     * Create sub-order for installment payment
+     *
+     * @param WC_Order $parent_order Parent order
+     * @param array    $installment  Installment data
+     * @return WC_Order
+     */
+    private function create_sub_order($parent_order, $installment) {
+        $sub_order = wc_create_order(array(
+            'status' => 'pending',
+            'customer_id' => $parent_order->get_customer_id(),
+            'created_via' => 'wcfp'
+        ));
+
+        // Copy parent order billing and shipping info
+        $sub_order->set_address($parent_order->get_address('billing'), 'billing');
+        $sub_order->set_address($parent_order->get_address('shipping'), 'shipping');
+
+        // Add product
+        $product = $parent_order->get_items()[0]->get_product();
+        $sub_order->add_product($product, 1, array(
+            'subtotal' => $installment['amount'],
+            'total' => $installment['amount']
+        ));
+
+        // Add reference meta
+        $sub_order->add_meta_data('_wcfp_parent_order', $parent_order->get_id());
+        $sub_order->add_meta_data('_wcfp_installment_number', $installment['number']);
+        
+        $sub_order->calculate_totals();
+        $sub_order->save();
+
+        return $sub_order;
+    }
+
+    /**
+     * Get payment URL for installment
+     *
+     * @param int $order_id
+     * @param int $installment_number
+     * @return string
+     */
+    public function get_payment_url($order_id, $installment_number) {
+        return add_query_arg(array(
+            'wcfp-pay' => $order_id,
+            'installment' => $installment_number
+        ), wc_get_checkout_url());
+    }
+
+    /**
+     * Log event with icon
+     *
+     * @param int    $order_id Order ID
+     * @param string $message  Event message
+     * @param string $type     Event type (payment, email, order, system)
+     */
+    public function log_event($order_id, $message, $type = 'system') {
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
+        }
+
+        $icon = isset($this->event_types[$type]) ? $this->event_types[$type] : $this->event_types['system'];
+        $timestamp = current_time('mysql');
+        
+        $order->add_order_note(sprintf(
+            '%s [%s] %s',
+            $icon,
+            $timestamp,
+            $message
+        ));
     }
 
     /**
@@ -145,28 +295,45 @@ class Payment {
 
         foreach ($orders as $order) {
             $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
-            if (empty($payments)) continue;
+            if (empty($payments) || empty($payments['installments'])) continue;
 
-            foreach ($payments as $payment_id => $payment) {
-                if ($payment['status'] === 'pending' && strtotime($payment['due_date']) < strtotime($overdue_date)) {
+            foreach ($payments['installments'] as $index => $installment) {
+                if ($installment['status'] === 'pending' && strtotime($installment['due_date']) < strtotime($overdue_date)) {
                     try {
-                        $this->update_payment_status($payment_id, 'overdue');
-                        $this->log_payment($payment_id, __('Payment marked as overdue.', 'wc-flex-pay'), 'warning');
-                        
-                        $order->add_order_note(
+                        // Update installment status
+                        $payments['installments'][$index]['status'] = 'overdue';
+                        update_post_meta($order->get_id(), '_wcfp_payments', $payments);
+
+                        // Log event
+                        $this->log_event(
+                            $order->get_id(),
                             sprintf(
-                                __('Flex Pay payment of %s is overdue (due date: %s).', 'wc-flex-pay'),
-                                wc_price($payment['amount']),
-                                date_i18n(get_option('date_format'), strtotime($payment['due_date']))
-                            )
+                                __('Installment %d payment of %s is overdue (due date: %s).', 'wc-flex-pay'),
+                                $installment['number'],
+                                wc_price($installment['amount']),
+                                date_i18n(get_option('date_format'), strtotime($installment['due_date']))
+                            ),
+                            'payment'
                         );
 
                         // Send overdue notification
-                        do_action('wcfp_payment_overdue', $payment_id, $order);
+                        do_action('wcfp_payment_overdue', $order->get_id(), $installment['number']);
+
+                        // Send email notification
+                        Emails::send_payment_overdue($order->get_id(), $installment['number']);
+                        $this->log_event(
+                            $order->get_id(),
+                            sprintf(
+                                __('Sent overdue payment notification for installment %d.', 'wc-flex-pay'),
+                                $installment['number']
+                            ),
+                            'email'
+                        );
+
                     } catch (\Exception $e) {
                         $this->log_error($e->getMessage(), array(
-                            'payment_id' => $payment_id,
-                            'order_id' => $order->get_id()
+                            'order_id' => $order->get_id(),
+                            'installment' => $installment['number']
                         ));
                     }
                 }
@@ -193,6 +360,14 @@ class Payment {
         }
 
         try {
+            // Check if this is a sub-order payment
+            $parent_order_id = $order->get_meta('_wcfp_parent_order');
+            $installment_number = $order->get_meta('_wcfp_installment_number');
+            
+            if ($parent_order_id && $installment_number) {
+                return $this->process_sub_order_payment($order, $parent_order_id, $installment_number);
+            }
+
             // Update payment status to processing
             $this->update_payment_status($payment_id, 'processing');
             
@@ -212,20 +387,121 @@ class Payment {
 
             if ($result['result'] === 'success') {
                 $this->update_payment_status($payment_id, 'completed');
-                $this->log_payment($payment_id, __('Payment processed successfully.', 'wc-flex-pay'));
+                $this->log_event($order->get_id(), __('Payment processed successfully.', 'wc-flex-pay'), 'payment');
+                
+                // Store transaction details
+                $this->update_payment_details($order->get_id(), $payment_id, array(
+                    'transaction_id' => $order->get_transaction_id(),
+                    'payment_method' => $payment_method,
+                    'payment_date' => current_time('mysql')
+                ));
                 
                 // Check if all payments are completed
                 if ($this->are_all_payments_completed($order->get_id())) {
                     $order->update_status('completed', __('All Flex Pay payments completed.', 'wc-flex-pay'));
+                    $this->log_event($order->get_id(), __('All installments completed.', 'wc-flex-pay'), 'system');
                 }
             } else {
                 throw new \Exception($result['messages'] ?? __('Payment processing failed.', 'wc-flex-pay'));
             }
+
+            return $result;
         } catch (\Exception $e) {
             $this->update_payment_status($payment_id, 'failed');
-            $this->log_payment($payment_id, sprintf(__('Payment failed: %s', 'wc-flex-pay'), $e->getMessage()), 'error');
-            $order->add_order_note(sprintf(__('Flex Pay payment failed: %s', 'wc-flex-pay'), $e->getMessage()));
+            $this->log_event($order->get_id(), sprintf(__('Payment failed: %s', 'wc-flex-pay'), $e->getMessage()), 'payment');
             throw $e;
+        }
+    }
+
+    /**
+     * Process sub-order payment
+     *
+     * @param WC_Order $sub_order         Sub order
+     * @param int      $parent_order_id   Parent order ID
+     * @param int      $installment_number Installment number
+     * @return array
+     * @throws \Exception If payment processing fails
+     */
+    private function process_sub_order_payment($sub_order, $parent_order_id, $installment_number) {
+        try {
+            // Get payment gateway
+            $payment_method = $sub_order->get_payment_method();
+            if (!$payment_method) {
+                throw new \Exception(__('No payment method found.', 'wc-flex-pay'));
+            }
+
+            $gateway = WC()->payment_gateways()->payment_gateways()[$payment_method];
+            if (!$gateway) {
+                throw new \Exception(__('Payment gateway not found.', 'wc-flex-pay'));
+            }
+
+            // Process payment
+            $result = $gateway->process_payment($sub_order->get_id());
+
+            if ($result['result'] === 'success') {
+                // Update parent order installment
+                $payments = $this->get_order_payments($parent_order_id);
+                $payments['installments'][$installment_number - 1]['status'] = 'completed';
+                $payments['installments'][$installment_number - 1]['payment_date'] = current_time('mysql');
+                $payments['installments'][$installment_number - 1]['payment_method'] = $payment_method;
+                $payments['installments'][$installment_number - 1]['transaction_id'] = $sub_order->get_transaction_id();
+                $payments['installments'][$installment_number - 1]['payment_suborder'] = $sub_order->get_id();
+
+                // Update summary
+                $payments['summary']['paid_installments']++;
+                $payments['summary']['paid_amount'] += $sub_order->get_total();
+                
+                // Find next due date
+                $next_installment = null;
+                foreach ($payments['installments'] as $installment) {
+                    if ($installment['status'] === 'pending') {
+                        $next_installment = $installment;
+                        break;
+                    }
+                }
+                $payments['summary']['next_due_date'] = $next_installment ? $next_installment['due_date'] : null;
+
+                update_post_meta($parent_order_id, '_wcfp_payments', $payments);
+
+                // Log events
+                $this->log_event(
+                    $parent_order_id,
+                    sprintf(
+                        __('Installment %d payment completed via sub-order #%s', 'wc-flex-pay'),
+                        $installment_number,
+                        $sub_order->get_order_number()
+                    ),
+                    'payment'
+                );
+
+                // Check if all payments are completed
+                if ($this->are_all_payments_completed($parent_order_id)) {
+                    $parent_order = wc_get_order($parent_order_id);
+                    $parent_order->update_status('completed', __('All Flex Pay payments completed.', 'wc-flex-pay'));
+                    $this->log_event($parent_order_id, __('All installments completed.', 'wc-flex-pay'), 'system');
+                }
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            $this->log_event($parent_order_id, sprintf(__('Payment failed for installment %d: %s', 'wc-flex-pay'), $installment_number, $e->getMessage()), 'payment');
+            throw $e;
+        }
+    }
+
+    /**
+     * Update payment details
+     *
+     * @param int   $order_id Order ID
+     * @param int   $payment_id Payment ID
+     * @param array $details Payment details
+     */
+    private function update_payment_details($order_id, $payment_id, $details) {
+        $payments = $this->get_order_payments($order_id);
+        
+        if (!empty($payments[$payment_id])) {
+            $payments[$payment_id] = array_merge($payments[$payment_id], $details);
+            update_post_meta($order_id, '_wcfp_payments', $payments);
         }
     }
 
@@ -233,30 +509,29 @@ class Payment {
      * Get next pending payment for order
      *
      * @param int $order_id
-     * @return int|false
+     * @return array|false Returns array with installment number and details, or false if none found
      */
     public function get_next_pending_payment($order_id) {
         $payments = get_post_meta($order_id, '_wcfp_payments', true);
-        if (empty($payments)) {
+        if (empty($payments) || empty($payments['installments'])) {
             return false;
         }
 
-        $pending_payments = array_filter($payments, function($payment) {
-            return $payment['status'] === 'pending';
+        $pending_installments = array_filter($payments['installments'], function($installment) {
+            return $installment['status'] === 'pending';
         });
 
-        if (empty($pending_payments)) {
+        if (empty($pending_installments)) {
             return false;
         }
 
         // Sort by due date
-        uasort($pending_payments, function($a, $b) {
+        usort($pending_installments, function($a, $b) {
             return strtotime($a['due_date']) - strtotime($b['due_date']);
         });
 
-        // Return first payment ID
-        reset($pending_payments);
-        return key($pending_payments);
+        // Return first pending installment
+        return reset($pending_installments);
     }
 
     /**
@@ -267,12 +542,12 @@ class Payment {
      */
     public function are_all_payments_completed($order_id) {
         $payments = get_post_meta($order_id, '_wcfp_payments', true);
-        if (empty($payments)) {
+        if (empty($payments) || empty($payments['installments'])) {
             return false;
         }
 
-        foreach ($payments as $payment) {
-            if ($payment['status'] !== 'completed') {
+        foreach ($payments['installments'] as $installment) {
+            if ($installment['status'] !== 'completed') {
                 return false;
             }
         }
@@ -283,32 +558,83 @@ class Payment {
     /**
      * Update payment status
      *
-     * @param int    $payment_id
-     * @param string $status
+     * @param int    $order_id Order ID
+     * @param int    $installment_number Installment number
+     * @param string $status New status
      * @throws \Exception If status update fails
      */
-    public function update_payment_status($payment_id, $status) {
+    public function update_payment_status($order_id, $installment_number, $status) {
         if (!array_key_exists($status, $this->statuses)) {
             throw new \Exception(__('Invalid payment status.', 'wc-flex-pay'));
         }
 
-        $payments = $this->get_order_payments_by_payment_id($payment_id);
-        if (empty($payments) || !isset($payments[$payment_id])) {
-            throw new \Exception(__('Payment not found.', 'wc-flex-pay'));
+        $payments = $this->get_order_payments($order_id);
+        if (empty($payments) || empty($payments['installments'][$installment_number - 1])) {
+            throw new \Exception(__('Installment not found.', 'wc-flex-pay'));
         }
 
-        $order_id = $payments[$payment_id]['order_id'];
-        $all_payments = get_post_meta($order_id, '_wcfp_payments', true);
+        // Update installment status
+        $payments['installments'][$installment_number - 1]['status'] = $status;
         
-        if (!is_array($all_payments)) {
-            $all_payments = array();
+        // Update summary
+        $this->update_payment_summary($order_id, $payments);
+
+        // Save changes
+        update_post_meta($order_id, '_wcfp_payments', $payments);
+
+        // Trigger actions
+        do_action('wcfp_payment_status_' . $status, $order_id, $installment_number);
+        do_action('wcfp_payment_status_changed', $order_id, $installment_number, $status);
+
+        // Log event
+        $this->log_event(
+            $order_id,
+            sprintf(
+                __('Installment %d status changed to %s', 'wc-flex-pay'),
+                $installment_number,
+                $this->statuses[$status]
+            ),
+            'system'
+        );
+    }
+
+    /**
+     * Update payment summary
+     *
+     * @param int   $order_id Order ID
+     * @param array $payments Payments data
+     */
+    private function update_payment_summary($order_id, &$payments) {
+        if (empty($payments['installments'])) {
+            return;
         }
 
-        $all_payments[$payment_id]['status'] = $status;
-        update_post_meta($order_id, '_wcfp_payments', $all_payments);
+        // Calculate summary
+        $total_installments = count($payments['installments']);
+        $paid_installments = 0;
+        $total_amount = 0;
+        $paid_amount = 0;
+        $next_due_date = null;
 
-        do_action('wcfp_payment_status_' . $status, $payment_id);
-        do_action('wcfp_payment_status_changed', $payment_id, $status);
+        foreach ($payments['installments'] as $installment) {
+            $total_amount += $installment['amount'];
+            
+            if ($installment['status'] === 'completed') {
+                $paid_installments++;
+                $paid_amount += $installment['amount'];
+            } elseif ($installment['status'] === 'pending' && (!$next_due_date || strtotime($installment['due_date']) < strtotime($next_due_date))) {
+                $next_due_date = $installment['due_date'];
+            }
+        }
+
+        // Update summary
+        $payments['summary'] = array(
+            'total_installments' => $total_installments,
+            'paid_installments' => $paid_installments,
+            'total_amount' => $total_amount,
+            'paid_amount' => $paid_amount,
+            'next_due_date' => $next_due_date
+        );
     }
 
     /**

@@ -1,136 +1,134 @@
 @use "../abstracts/variables" as *;
 
 .wcfp-payment-history {
-  margin: $spacing-lg 0;
+    margin: $spacing-xl 0;
+    padding: $spacing-xl;
+    background: $color-background;
+    border: 1px solid $color-border;
+    border-radius: $border-radius-lg;
+    box-shadow: $box-shadow-sm;
 
-  h3 {
-    margin-bottom: $spacing-lg;
-    padding-bottom: $spacing-sm;
-    border-bottom: 1px solid $color-border;
-  }
-}
-
-.payment-entry {
-  margin-bottom: $spacing-xxl;
-  padding: $spacing-lg;
-  background: $color-background;
-  border: 1px solid $color-border;
-  border-radius: $border-radius-md;
-}
-
-.payment-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-md;
-
-  h4 {
-    margin: 0;
-    font-size: $font-size-lg;
-  }
-}
-
-// Payment Status Colors
-.payment-status,
-.log-type {
-  display: inline-block;
-  padding: 3px $spacing-sm;
-  border-radius: $border-radius-sm;
-  color: $color-background;
-  font-size: $font-size-sm;
-}
-
-.payment-status {
-  &.status-pending {
-    background-color: $color-status-pending-bg;
-    color: $color-status-pending-text;
-  }
-
-  &.status-completed {
-    background-color: $color-status-completed-bg;
-    color: $color-status-completed-text;
-  }
-
-  &.status-overdue {
-    background-color: $color-status-overdue-bg;
-    color: $color-status-overdue-text;
-  }
-
-  &.status-failed {
-    background-color: $color-status-failed-bg;
-    color: $color-status-failed-text;
-  }
-}
-
-// Log Type Colors
-.log-type {
-  &.type-info {
-    background-color: $color-notice-info-bg;
-    color: $color-primary;
-  }
-
-  &.type-warning {
-    background-color: $color-notice-warning-bg;
-    color: $color-status-pending-text;
-  }
-
-  &.type-error {
-    background-color: $color-status-failed-bg;
-    color: $color-status-failed-text;
-  }
-}
-
-.payment-details {
-  margin-bottom: $spacing-lg;
-
-  p {
-    margin: $spacing-xs 0;
-  }
-}
-
-.payment-logs {
-  margin-top: $spacing-lg;
-  padding-top: $spacing-lg;
-  border-top: 1px solid $color-border;
-
-  h5 {
-    margin: 0 0 $spacing-md;
-  }
-
-  table {
-    margin: 0;
-  }
-
-  th,
-  td {
-    padding: $spacing-sm;
-  }
-}
-
-.payment-actions {
-  margin-top: $spacing-lg;
-  padding-top: $spacing-lg;
-  border-top: 1px solid $color-border;
-  text-align: right;
-}
-
-.overdue {
-  color: $color-error;
-  font-weight: $font-weight-bold;
-}
-
-@media screen and (max-width: $breakpoint-mobile) {
-  .payment-header {
-    flex-direction: column;
-    align-items: flex-start;
-
-    .payment-status {
-      margin-top: $spacing-sm;
+    h3 {
+        margin: 0 0 $spacing-xl;
+        padding-bottom: $spacing-md;
+        border-bottom: 1px solid $color-border;
+        color: $color-text-primary;
+        font-size: $font-size-xl;
     }
-  }
+}
 
-  .payment-logs table {
-    display: block;
-    overflow-x: auto;
-  }
+.wcfp-payment-summary {
+    margin-bottom: $spacing-xxl;
+    padding: $spacing-lg;
+    background: $color-background-light;
+    border: 1px solid $color-border;
+    border-radius: $border-radius-lg;
+
+    h4 {
+        margin: 0 0 $spacing-lg;
+        color: $color-text-primary;
+        font-size: $font-size-lg;
+    }
+}
+
+.wcfp-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: $spacing-lg;
+}
+
+.wcfp-summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+}
+
+.wcfp-label {
+    font-weight: $font-weight-medium;
+    color: $color-text-secondary;
+}
+
+.wcfp-value {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+
+    &.wcfp-success {
+        color: $color-success;
+    }
+
+    &.wcfp-warning {
+        color: $color-warning;
+    }
+}
+
+// Payment row status variations
+.wcfp-payment-row {
+    &.completed {
+        background: rgba($color-success, 0.05);
+    }
+
+    &.pending {
+        background: rgba($color-warning, 0.05);
+    }
+
+    &.failed, &.overdue {
+        background: rgba($color-error, 0.05);
+    }
+
+    &.processing {
+        background: rgba($color-primary, 0.05);
+    }
+}
+
+.wcfp-overdue {
+    color: $color-error;
+    font-weight: $font-weight-medium;
+    font-size: $font-size-sm;
+}
+
+// Status badges
+.wcfp-status-badge {
+    display: inline-block;
+    padding: $spacing-xs $spacing-sm;
+    border-radius: $border-radius-sm;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    text-transform: capitalize;
+
+    &.status-completed {
+        background: rgba($color-success, 0.1);
+        color: $color-success;
+    }
+
+    &.status-pending {
+        background: rgba($color-warning, 0.1);
+        color: $color-warning;
+    }
+
+    &.status-failed {
+        background: rgba($color-error, 0.1);
+        color: $color-error;
+    }
+
+    &.status-overdue {
+        background: rgba($color-error, 0.1);
+        color: $color-error;
+    }
+
+    &.status-processing {
+        background: rgba($color-primary, 0.1);
+        color: $color-primary;
+    }
+}
+
+@media (max-width: $breakpoint-tablet) {
+    .wcfp-summary-grid {
+        grid-template-columns: 1fr;
+        gap: $spacing-md;
+    }
+
+    .wcfp-summary-item {
+        text-align: center;
+    }
 }

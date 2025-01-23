@@ -1,24 +1,135 @@
 @use "../abstracts/variables" as *;
 
+// Sub-order information
+.wcfp-sub-order-info {
+    margin-bottom: $spacing-lg;
+    padding: $spacing-md;
+    background: $color-background-light;
+    border: 1px solid $color-border;
+    border-radius: $border-radius-md;
+    display: flex;
+    gap: $spacing-xl;
+
+    p {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: $spacing-sm;
+
+        strong {
+            color: $color-text-secondary;
+        }
+
+        a {
+            color: $color-primary;
+            text-decoration: none;
+            font-weight: $font-weight-medium;
+
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+}
+
+// Order payments section
 .wcfp-order-payments {
-  margin: $spacing-md 0;
+    margin: $spacing-xl 0;
 }
 
+// Payment summary
 .wcfp-payment-summary {
-  margin-bottom: $spacing-lg;
-  padding: $spacing-md;
-  background: $color-background-light;
-  border: 1px solid $color-border;
-  border-radius: $border-radius-md;
-
-  p {
-    margin: $spacing-xs 0;
-  }
+    margin-bottom: $spacing-xl;
+    padding: $spacing-lg;
+    background: $color-background-light;
+    border: 1px solid $color-border;
+    border-radius: $border-radius-lg;
+    box-shadow: $box-shadow-sm;
 }
 
+.wcfp-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: $spacing-lg;
+}
+
+.wcfp-summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+}
+
+// Payment notes
 .wcfp-payment-notes {
-  padding: $spacing-sm;
-  background: $color-background-light;
-  border-left: 4px solid $color-border;
-  margin: $spacing-xs 0;
+    padding: $spacing-md;
+    background: $color-background-light;
+    border-left: 4px solid $color-primary;
+    margin: $spacing-sm 0;
+    font-size: $font-size-sm;
+
+    strong {
+        display: inline-block;
+        margin-bottom: $spacing-xs;
+        color: $color-text-primary;
+    }
+}
+
+// Sub-order meta box
+.wcfp-sub-order-details {
+    margin-bottom: $spacing-lg;
+
+    p {
+        margin: $spacing-sm 0;
+        display: flex;
+        align-items: center;
+        gap: $spacing-sm;
+
+        strong {
+            min-width: 120px;
+            color: $color-text-secondary;
+        }
+
+        a {
+            color: $color-primary;
+            text-decoration: none;
+            font-weight: $font-weight-medium;
+
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+}
+
+.wcfp-sub-order-actions {
+    padding-top: $spacing-md;
+    border-top: 1px solid $color-border;
+    text-align: right;
+
+    .button {
+        margin-left: $spacing-sm;
+    }
+}
+
+// Responsive styles
+@media (max-width: $breakpoint-tablet) {
+    .wcfp-sub-order-info {
+        flex-direction: column;
+        gap: $spacing-sm;
+    }
+
+    .wcfp-summary-grid {
+        grid-template-columns: 1fr;
+        gap: $spacing-md;
+    }
+
+    .wcfp-summary-item {
+        text-align: center;
+    }
+
+    .wcfp-payment-notes {
+        margin: 0;
+        border-left: none;
+        border-bottom: 1px solid $color-border;
+    }
 }

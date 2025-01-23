@@ -10,7 +10,7 @@ Enable flexible payment schedules for WooCommerce products with scheduled partia
 - **Custom Payment Schedules**: Create flexible payment plans per product
 - **Installment Control**: Set custom amounts and due dates for each payment
 - **Payment Tracking**: Monitor payment status and history
-- **Automated Processing**: Handle payments automatically
+- **Sub-order System**: Individual orders for each installment
 - **Status Management**: Track orders with specialized statuses:
   - Flex Pay Pending
   - Flex Pay Partial
@@ -21,14 +21,16 @@ Enable flexible payment schedules for WooCommerce products with scheduled partia
 ### Admin Features
 - **Product Integration**: Enable/disable flex pay per product
 - **Schedule Management**: Visual interface for payment schedule creation
-- **Order Dashboard**: Track and manage flex pay orders
-- **Payment History**: View complete payment records
-- **Visual Timeline**: See payment schedules at a glance
+- **Order Dashboard**: Track and manage flex pay orders with sub-orders
+- **Payment History**: Enhanced view of complete payment records
+- **Visual Timeline**: See payment schedules and progress at a glance
+- **Sub-order Management**: Create and manage individual installment orders
 
 ### Customer Experience
-- **Clear Schedules**: Visual payment timeline
-- **Cart Integration**: See installment details during checkout
-- **Status Tracking**: Monitor payment progress
+- **Clear Schedules**: Visual payment timeline with installment tracking
+- **Cart Integration**: Detailed installment breakdown during checkout
+- **Status Tracking**: Monitor payment progress and upcoming payments
+- **Payment Links**: Receive unique payment links for each installment
 - **Email Updates**: Automated notifications for payments
 
 ### Notification System
@@ -37,6 +39,8 @@ Enable flexible payment schedules for WooCommerce products with scheduled partia
   - Payment failures
   - Payment reminders
   - Overdue payments
+  - Upcoming installments
+  - Payment links
 - **Customizable Templates**: Modify email content and styling
 - **Status-Based Triggers**: Automatic notifications based on payment status
 
@@ -71,7 +75,8 @@ Enable flexible payment schedules for WooCommerce products with scheduled partia
 2. View flex pay orders with custom statuses
 3. Track payment progress
 4. Process payments manually if needed
-5. Send payment reminders
+5. Create sub-orders for installments
+6. Send payment reminders and links
 
 ## 🎨 Development
 
@@ -101,6 +106,8 @@ wc-flex-pay/
 - Component-based structure
 - Shared variables and utilities
 - Responsive design patterns
+- Table component system
+- Status badge system
 
 #### Utility Classes
 ```html
@@ -143,9 +150,11 @@ npm run watch
 ### Data Storage
 
 The plugin uses WordPress post meta for data storage:
-- `_wcfp_schedules`: Product payment schedules
-- `_wcfp_payments`: Order payment information
+- `_wcfp_payments`: Payment and installment data
+- `_wcfp_payment_status`: Payment status tracking
 - `_wcfp_payment_logs`: Payment activity logs
+- `_wcfp_parent_order`: Sub-order parent reference
+- `_wcfp_installment_number`: Sub-order installment number
 
 ## 🔌 Hooks and Filters
 
@@ -158,14 +167,15 @@ Documentation for available hooks and filters coming soon.
 - Capability checks
 - Direct file access prevention
 - Secure payment processing
+- Sub-order access control
 
 ## 📝 Changelog
 
-### [1.2.1] - 2025-01-22
-- Added new order statuses
-- Switched to meta-based storage
-- Improved admin UI
-- Enhanced performance
+### [1.3.0] - 2025-01-23
+- Added sub-order system for installments
+- Enhanced payment tracking and management
+- Improved admin interface and responsive design
+- Added payment link generation system
 
 [View full changelog](CHANGELOG.md)
 

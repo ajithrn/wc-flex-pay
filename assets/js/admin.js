@@ -7,6 +7,7 @@ jQuery(function($) {
             this.initPaymentSchedule();
             this.initDashboardFilters();
             this.initPaymentActions();
+            this.initSubOrderActions();
         },
 
         // Initialize datepicker for due dates
@@ -132,6 +133,35 @@ jQuery(function($) {
                     link.click();
                     document.body.removeChild(link);
                 }
+            });
+        },
+
+        // Initialize sub-order actions
+        initSubOrderActions: function() {
+            // Create sub-order
+            $('.create-sub-order').on('click', function() {
+                var $button = $(this);
+                var orderId = $button.data('order-id');
+                var nonce = $button.data('nonce');
+                
+                $button.prop('disabled', true);
+                
+                $.post(wcfp_admin_params.ajax_url, {
+                    action: 'wcfp_create_sub_order',
+                    order_id: orderId,
+                    nonce: nonce
+                }, function(response) {
+                    if (response.success) {
+                        if (response.data.redirect) {
+                            window.location.href = response.data.redirect;
+                        } else {
+                            location.reload();
+                        }
+                    } else {
+                        alert(response.data);
+                        $button.prop('disabled', false);
+                    }
+                });
             });
         },
 
