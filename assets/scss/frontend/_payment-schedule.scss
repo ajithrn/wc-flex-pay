@@ -11,7 +11,7 @@
 
 .wcfp-payment-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: $spacing-lg;
   margin-bottom: $spacing-xxl;
 }
@@ -22,11 +22,6 @@
   background: $color-background-light;
   border: 1px solid $color-border;
   transition: $transition-default;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: $box-shadow-md;
-  }
 
   &.wcfp-initial-box {
     background: $color-notice-info-bg;
@@ -123,17 +118,10 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  background: $color-background-light;
   padding: $spacing-lg;
   border-radius: $border-radius-md;
   border: 1px solid $color-border;
   transition: $transition-default;
-
-  &:hover {
-    background: $color-background;
-    border-color: $color-primary;
-    transform: translateX(5px);
-  }
 }
 
 .wcfp-timeline-date {
@@ -151,9 +139,6 @@
 .wcfp-days {
   color: $color-text-secondary;
   font-size: $font-size-sm;
-  padding: $spacing-xs $spacing-sm;
-  background: rgba($color-primary, 0.1);
-  border-radius: $border-radius-sm;
   display: inline-block;
 }
 
@@ -162,9 +147,6 @@
   color: $color-primary;
   font-size: $font-size-lg;
   padding: $spacing-xs $spacing-sm;
-  background: $color-background;
-  border-radius: $border-radius-sm;
-  border: 1px solid $color-border;
 }
 
 // Notice Box
@@ -172,8 +154,6 @@
   margin-top: $spacing-xxl;
   padding: $spacing-xl;
   background: $color-background;
-  border-radius: $border-radius-lg;
-  border: 1px solid $color-primary;
   box-shadow: $box-shadow-sm;
 
   h4 {
@@ -197,17 +177,7 @@
     align-items: center;
     color: $color-text-secondary;
     line-height: 1.5;
-    padding: $spacing-md;
-    background: $color-background-light;
-    border-radius: $border-radius-md;
-    border: 1px solid $color-border;
-    transition: $transition-default;
-
-    &:hover {
-      transform: translateY(-2px);
-      border-color: $color-primary;
-      box-shadow: $box-shadow-sm;
-    }
+    margin: 0;
   }
 }
 

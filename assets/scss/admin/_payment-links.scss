@@ -1,0 +1,77 @@
+@use "../abstracts/variables" as *;
+@use "sass:color";
+
+.wcfp-payment-link {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-xs;
+    align-items: center;
+
+    .wcfp-link-input {
+        flex: 1;
+        min-width: 200px;
+        padding: $spacing-xs;
+        border: 1px solid $color-border;
+        border-radius: $border-radius-sm;
+        background: $color-background-light;
+        font-size: $font-size-sm;
+        color: $color-text-secondary;
+        cursor: text;
+        
+        &:focus {
+            border-color: $color-primary;
+            outline: none;
+            box-shadow: 0 0 0 1px $color-primary;
+        }
+    }
+
+    .button {
+        padding: $spacing-xs $spacing-sm;
+        height: auto;
+        line-height: 1.4;
+        
+        &.copy-link {
+            background: $color-success;
+            border-color: color.scale($color-success, $lightness: -10%);
+            color: $color-background;
+            
+            &:hover {
+                background: color.scale($color-success, $lightness: -5%);
+            }
+        }
+        
+        &.send-link {
+            background: $color-primary;
+            border-color: color.scale($color-primary, $lightness: -10%);
+            color: $color-background;
+            
+            &:hover {
+                background: color.scale($color-primary, $lightness: -5%);
+            }
+        }
+    }
+}
+
+.wcfp-link-expiry {
+    width: 100%;
+    margin: $spacing-xs 0 0;
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+}
+
+// Responsive styles
+@media screen and (max-width: $breakpoint-tablet) {
+    .wcfp-payment-link {
+        flex-direction: column;
+        align-items: stretch;
+        
+        .wcfp-link-input {
+            width: 100%;
+        }
+        
+        .button {
+            width: 100%;
+            text-align: center;
+        }
+    }
+}

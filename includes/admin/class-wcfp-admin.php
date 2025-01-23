@@ -68,6 +68,8 @@ class Admin {
         add_action('wp_ajax_wcfp_update_schedule', array($this, 'ajax_update_schedule'));
         add_action('wp_ajax_wcfp_bulk_edit_schedules', array($this, 'ajax_bulk_edit_schedules'));
         add_action('wp_ajax_wcfp_create_sub_order', array($this, 'ajax_create_sub_order'));
+        add_action('wp_ajax_wcfp_generate_payment_link', array($this, 'ajax_generate_payment_link'));
+        add_action('wp_ajax_wcfp_send_payment_link', array($this, 'ajax_send_payment_link'));
         
         // Order list customization
         add_filter('manage_edit-shop_order_columns', array($this, 'add_order_list_columns'));
@@ -93,29 +95,21 @@ class Admin {
      * Enqueue admin scripts
      */
     public function enqueue_scripts() {
-        $screen = get_current_screen();
-
-        // Only enqueue on relevant pages
-        $allowed_screens = array(
-            'wc-flex-pay',          // Plugin pages
-            'product',              // Product edit page
-            'edit-product',         // Products list
-            'shop_order',           // Order edit page
-            'edit-shop_order',      // Orders list
-            'woocommerce_page_wc-settings' // WooCommerce settings
-        );
-
-        $is_allowed = false;
-        foreach ($allowed_screens as $allowed_screen) {
-            if (strpos($screen->id, $allowed_screen) !== false) {
-                $is_allowed = true;
-                break;
-            }
-        }
-
-        if (!$is_allowed) {
+        // Only load for admin users
+        if (!current_user_can('manage_woocommerce')) {
             return;
         }
+
+        error_log('WCFP Debug - Proceeding with script enqueue for all admin pages');
+
+        // Enqueue frontend styles in admin
+        wp_enqueue_style(
+            'wcfp-frontend',
+            WCFP_PLUGIN_URL . 'assets/css/frontend.css',
+            array(),
+            WCFP_VERSION
+        );
+        error_log('WCFP Debug - Frontend CSS URL: ' . WCFP_PLUGIN_URL . 'assets/css/frontend.css');
 
         // Enqueue styles
         wp_enqueue_style(
@@ -124,15 +118,38 @@ class Admin {
             array(),
             WCFP_VERSION
         );
+        error_log('WCFP Debug - Admin CSS URL: ' . WCFP_PLUGIN_URL . 'assets/css/admin.css');
 
-        // Enqueue scripts
+        // Enqueue clipboard.js
+        wp_enqueue_script(
+            'clipboard',
+            WCFP_PLUGIN_URL . 'assets/js/clipboard.min.js',
+            array(),
+            '2.0.11',
+            true
+        );
+        error_log('WCFP Debug - Clipboard.js URL: ' . WCFP_PLUGIN_URL . 'assets/js/clipboard.min.js');
+
+        // Check if dependencies are registered
+        error_log('WCFP Debug - Checking dependencies:');
+        error_log('WCFP Debug - jQuery: ' . (wp_script_is('jquery', 'registered') ? 'registered' : 'not registered'));
+        error_log('WCFP Debug - jQuery UI Datepicker: ' . (wp_script_is('jquery-ui-datepicker', 'registered') ? 'registered' : 'not registered'));
+        error_log('WCFP Debug - WP Util: ' . (wp_script_is('wp-util', 'registered') ? 'registered' : 'not registered'));
+        error_log('WCFP Debug - Clipboard: ' . (wp_script_is('clipboard', 'registered') ? 'registered' : 'not registered'));
+
+        // Ensure jQuery UI core is loaded before datepicker
+        wp_enqueue_script('jquery-ui-core');
+        wp_enqueue_script('jquery-ui-datepicker');
+
+        // Enqueue admin scripts
         wp_enqueue_script(
             'wcfp-admin',
             WCFP_PLUGIN_URL . 'assets/js/admin.js',
-            array('jquery', 'jquery-ui-datepicker', 'wp-util'),
+            array('jquery', 'jquery-ui-core', 'jquery-ui-datepicker', 'wp-util', 'clipboard'),
             WCFP_VERSION,
             true
         );
+        error_log('WCFP Debug - Admin JS URL: ' . WCFP_PLUGIN_URL . 'assets/js/admin.js');
 
         // Localize script
         wp_localize_script(
@@ -149,6 +166,8 @@ class Admin {
                     'no_installments' => __('Please add at least one installment.', 'wc-flex-pay'),
                     'invalid_amount' => __('Please enter a valid amount.', 'wc-flex-pay'),
                     'invalid_date' => __('Please enter a valid date.', 'wc-flex-pay'),
+                    'copied' => __('Copied!', 'wc-flex-pay'),
+                    'email_sent' => __('Payment link sent successfully!', 'wc-flex-pay'),
                 ),
                 'currency_symbol' => get_woocommerce_currency_symbol(),
                 'currency_pos' => get_option('woocommerce_currency_pos'),
@@ -166,6 +185,11 @@ class Admin {
             array(),
             WCFP_VERSION
         );
+
+        // Log all enqueued scripts and styles for debugging
+        global $wp_scripts, $wp_styles;
+        error_log('WCFP Debug - Enqueued scripts: ' . print_r($wp_scripts->queue, true));
+        error_log('WCFP Debug - Enqueued styles: ' . print_r($wp_styles->queue, true));
     }
 
     /**
@@ -267,8 +291,7 @@ class Admin {
         ?>
         <button type="button" 
                 class="button create-sub-order" 
-                data-order-id="<?php echo esc_attr($order->get_id()); ?>"
-                data-nonce="<?php echo wp_create_nonce('wcfp-admin'); ?>">
+                data-order-id="<?php echo esc_attr($order->get_id()); ?>">
             <?php esc_html_e('Create Sub-order', 'wc-flex-pay'); ?>
         </button>
         <?php
@@ -500,17 +523,14 @@ class Admin {
      * Get order payments
      */
     private function get_order_payments($order_id) {
-        $payments = get_post_meta($order_id, '_wcfp_payments', true);
-        if (empty($payments)) {
+        $order = wc_get_order($order_id);
+        if (!$order) {
             return array();
         }
 
-        // Sort by due date
-        uasort($payments, function($a, $b) {
-            return strtotime($a['due_date']) - strtotime($b['due_date']);
-        });
-
-        return $payments;
+        $order_manager = new \WCFP\Order();
+        $payments = $order_manager->get_order_payments($order);
+        return $payments['has_installments'] ? $payments : array();
     }
 
     /**
@@ -653,6 +673,86 @@ class Admin {
             }
 
             wp_send_json_success(__('Schedules updated successfully.', 'wc-flex-pay'));
+        } catch (\Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
+    }
+
+    /**
+     * Generate payment link via AJAX
+     */
+    public function ajax_generate_payment_link() {
+        check_ajax_referer('wcfp-admin', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission denied.', 'wc-flex-pay'));
+        }
+
+        $order_id = isset($_POST['order_id']) ? absint($_POST['order_id']) : 0;
+        $installment = isset($_POST['installment']) ? absint($_POST['installment']) : 0;
+
+        if (!$order_id || !$installment) {
+            wp_send_json_error(__('Invalid parameters.', 'wc-flex-pay'));
+        }
+
+        try {
+            $payment_manager = new \WCFP\Payment();
+            $link = $payment_manager->generate_payment_link($order_id, $installment, array(
+                'regenerate' => true
+            ));
+
+            wp_send_json_success(array(
+                'message' => __('Payment link generated successfully.', 'wc-flex-pay'),
+                'link' => $link
+            ));
+        } catch (\Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
+    }
+
+    /**
+     * Send payment link via email
+     */
+    public function ajax_send_payment_link() {
+        check_ajax_referer('wcfp-admin', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission denied.', 'wc-flex-pay'));
+        }
+
+        $order_id = isset($_POST['order_id']) ? absint($_POST['order_id']) : 0;
+        $installment = isset($_POST['installment']) ? absint($_POST['installment']) : 0;
+
+        if (!$order_id || !$installment) {
+            wp_send_json_error(__('Invalid parameters.', 'wc-flex-pay'));
+        }
+
+        try {
+            $order = wc_get_order($order_id);
+            if (!$order) {
+                throw new \Exception(__('Order not found.', 'wc-flex-pay'));
+            }
+
+            $payment_manager = new \WCFP\Payment();
+            $link = $payment_manager->generate_payment_link($order_id, $installment);
+
+            // Send email
+            $mailer = WC()->mailer();
+            $email = new \WCFP\Emails\Payment_Link($mailer);
+            $email->trigger($order_id, $installment, $link);
+
+            // Log event
+            $payment_manager->log_event(
+                $order_id,
+                sprintf(
+                    __('Payment link for installment %d sent to %s', 'wc-flex-pay'),
+                    $installment,
+                    $order->get_billing_email()
+                ),
+                'email'
+            );
+
+            wp_send_json_success(__('Payment link sent successfully.', 'wc-flex-pay'));
         } catch (\Exception $e) {
             wp_send_json_error($e->getMessage());
         }

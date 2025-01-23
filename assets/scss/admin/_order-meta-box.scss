@@ -34,7 +34,21 @@
 
 // Order payments section
 .wcfp-order-payments {
-    margin: $spacing-xl 0;
+  margin: $spacing-xxl 0;
+
+  h2 {
+      margin-bottom: $spacing-xl;
+      color: $color-text-primary;
+      font-size: $font-size-xl;
+  }
+
+  h3 {
+      margin: $spacing-xl 0 $spacing-lg;
+      color: $color-text-primary;
+      font-size: $font-size-lg;
+      padding-bottom: $spacing-sm;
+      border-bottom: 1px solid $color-border;
+  }
 }
 
 // Payment summary

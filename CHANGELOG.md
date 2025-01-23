@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.4.0] - 2025-01-23
+### Added
+- Payment link system with copy and email functionality
+- ClipboardJS integration for payment link copying
+- New payment link email template
+- Enhanced debugging and error logging in admin
+
+### Changed
+- Refactored payment schedule display for better organization
+- Improved payment status handling and updates
+- Enhanced responsive design for payment tables
+- Updated admin UI with better payment link management
+
+### Enhanced
+- Error handling with detailed logging
+- Payment processing reliability
+- Admin JavaScript with better error catching
+- Frontend payment schedule visualization
+
 ## [1.3.0] - 2025-01-23
 ### Added
 - Sub-order system for individual installment management

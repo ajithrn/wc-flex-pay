@@ -11,7 +11,7 @@
  * Plugin Name: WC Flex Pay
  * Plugin URI:  https://kwirx.com/wc-flex-pay
  * Description: Enable selling products with scheduled partial payments in WooCommerce
- * Version:     1.3.0
+ * Version:     1.4.0
  * Author:      Ajith R N
  * Author URI:  https://kwirx.com
  * Text Domain: wc-flex-pay
@@ -37,7 +37,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants.
-define('WCFP_VERSION', '1.3.0');
+define('WCFP_VERSION', '1.4.0');
 define('WCFP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WCFP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WCFP_PLUGIN_BASENAME', plugin_basename(__FILE__));

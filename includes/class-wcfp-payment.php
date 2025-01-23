@@ -64,6 +64,16 @@ class Payment {
         
         // Admin
         add_action('woocommerce_admin_order_data_after_order_details', array($this, 'display_payment_history'));
+
+        // Cart and Checkout
+        add_filter('woocommerce_add_cart_item_data', array($this, 'add_cart_item_data'), 10, 3);
+        add_filter('woocommerce_get_cart_item_from_session', array($this, 'get_cart_item_from_session'), 10, 2);
+        add_filter('woocommerce_get_item_data', array($this, 'get_item_data'), 10, 2);
+        add_action('woocommerce_before_calculate_totals', array($this, 'before_calculate_totals'), 10, 1);
+
+        // Order Display
+        add_action('woocommerce_order_details_after_order_table', array($this, 'display_payment_schedule'));
+        add_action('woocommerce_admin_order_data_after_billing_address', array($this, 'display_admin_payment_schedule'));
     }
 
     /**
@@ -76,11 +86,180 @@ class Payment {
     }
 
     /**
+     * Generate payment link for installment
+     *
+     * @param int   $order_id Order ID
+     * @param int   $installment_number Installment number
+     * @param array $args Optional arguments
+     * @return array Link data including URL and expiry
+     */
+    public function generate_payment_link($order_id, $installment_number, $args = array()) {
+        $defaults = array(
+            'expires_in' => 72, // Hours until link expires
+            'regenerate' => false // Whether to regenerate if link exists
+        );
+        $args = wp_parse_args($args, $defaults);
+
+        // Get existing link
+        $links = get_post_meta($order_id, '_wcfp_payment_links', true) ?: array();
+        $link_key = "{$installment_number}";
+
+        // Check if link exists and is still valid
+        if (!empty($links[$link_key]) && !$args['regenerate']) {
+            if (empty($links[$link_key]['expires_at']) || strtotime($links[$link_key]['expires_at']) > current_time('timestamp')) {
+                return $links[$link_key];
+            }
+        }
+
+        // Get parent order and verify installment
+        $parent_order = wc_get_order($order_id);
+        if (!$parent_order) {
+            throw new \Exception(__('Invalid order.', 'wc-flex-pay'));
+        }
+
+        // Get installment data from order items
+        $installment = null;
+        foreach ($parent_order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (!empty($payment_status[$installment_number - 1])) {
+                    $installment = $payment_status[$installment_number - 1];
+                    break;
+                }
+            }
+        }
+
+        if (!$installment) {
+            throw new \Exception(__('Invalid installment.', 'wc-flex-pay'));
+        }
+
+        if ($installment['status'] === 'completed') {
+            throw new \Exception(__('This installment has already been paid.', 'wc-flex-pay'));
+        }
+
+        // Create or get existing sub-order
+        $sub_order_id = $installment['sub_order_id'] ?? null;
+        $sub_order = $sub_order_id ? wc_get_order($sub_order_id) : null;
+
+        if (!$sub_order || $args['regenerate']) {
+            // Create new sub-order
+            $sub_order = wc_create_order(array(
+                'status' => 'pending',
+                'customer_id' => $parent_order->get_customer_id(),
+                'created_via' => 'wcfp'
+            ));
+
+            // Copy parent order billing and shipping info
+            $sub_order->set_address($parent_order->get_address('billing'), 'billing');
+            $sub_order->set_address($parent_order->get_address('shipping'), 'shipping');
+
+            // Add product
+            $items = $parent_order->get_items();
+            $item = reset($items);
+            if (!$item) {
+                throw new \Exception(__('No product found in parent order.', 'wc-flex-pay'));
+            }
+
+            $product = $item->get_product();
+            if (!$product) {
+                throw new \Exception(__('Product not found.', 'wc-flex-pay'));
+            }
+
+            $sub_order->add_product($product, 1, array(
+                'subtotal' => $installment['amount'],
+                'total' => $installment['amount']
+            ));
+
+            // Add reference meta
+            $sub_order->add_meta_data('_wcfp_parent_order', $parent_order->get_id());
+            $sub_order->add_meta_data('_wcfp_installment_number', $installment_number);
+            
+            $sub_order->calculate_totals();
+            $sub_order->save();
+
+            // Update installment with sub-order reference
+            $payments['installments'][$installment_number - 1]['sub_order_id'] = $sub_order->get_id();
+            update_post_meta($order_id, '_wcfp_payments', $payments);
+        }
+
+        // Generate new link
+        $token = wp_generate_password(32, false);
+        $expires_at = date('Y-m-d H:i:s', strtotime("+{$args['expires_in']} hours"));
+
+        $link_data = array(
+            'token' => $token,
+            'url' => $sub_order->get_checkout_payment_url(),
+            'created_at' => current_time('mysql'),
+            'expires_at' => $expires_at,
+            'status' => 'active',
+            'sub_order_id' => $sub_order->get_id()
+        );
+
+        // Save link data
+        $links[$link_key] = $link_data;
+        update_post_meta($order_id, '_wcfp_payment_links', $links);
+
+        // Log link generation
+        $this->log_event(
+            $order_id,
+            sprintf(
+                __('Generated payment link for installment %d (expires: %s) - Sub-order #%s', 'wc-flex-pay'),
+                $installment_number,
+                date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($expires_at)),
+                $sub_order->get_order_number()
+            ),
+            'system'
+        );
+
+        return $link_data;
+    }
+
+    /**
+     * Validate payment link
+     *
+     * @param int    $order_id Order ID
+     * @param int    $installment_number Installment number
+     * @param string $token Token to validate
+     * @return bool Whether link is valid
+     */
+    public function validate_payment_link($order_id, $installment_number, $token) {
+        $links = get_post_meta($order_id, '_wcfp_payment_links', true) ?: array();
+        $link_key = "{$installment_number}";
+
+        if (empty($links[$link_key])) {
+            return false;
+        }
+
+        $link = $links[$link_key];
+
+        // Check token
+        if ($link['token'] !== $token) {
+            return false;
+        }
+
+        // Check expiry
+        if (!empty($link['expires_at']) && strtotime($link['expires_at']) <= current_time('timestamp')) {
+            // Update link status to expired
+            $links[$link_key]['status'] = 'expired';
+            update_post_meta($order_id, '_wcfp_payment_links', $links);
+            return false;
+        }
+
+        // Check if link is active
+        if ($link['status'] !== 'active') {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Handle payment URL
      */
     public function handle_payment_url() {
         $order_id = absint($_GET['wcfp-pay']);
         $installment_number = absint($_GET['installment']);
+        $token = sanitize_text_field($_GET['token'] ?? '');
 
         try {
             // Verify order exists
@@ -90,12 +269,17 @@ class Payment {
             }
 
             // Verify customer
-            if ($parent_order->get_customer_id() !== get_current_user_id()) {
+            if ($parent_order->get_customer_id() !== get_current_user_id() && !current_user_can('manage_woocommerce')) {
                 throw new \Exception(__('Unauthorized access.', 'wc-flex-pay'));
             }
 
+            // Validate payment link if token provided
+            if ($token && !$this->validate_payment_link($order_id, $installment_number, $token)) {
+                throw new \Exception(__('Invalid or expired payment link.', 'wc-flex-pay'));
+            }
+
             // Get installment details
-            $payments = $this->get_order_payments($order_id);
+            $payments = get_post_meta($order_id, '_wcfp_payments', true);
             if (empty($payments['installments'][$installment_number - 1])) {
                 throw new \Exception(__('Invalid installment.', 'wc-flex-pay'));
             }
@@ -105,21 +289,26 @@ class Payment {
                 throw new \Exception(__('This installment has already been paid.', 'wc-flex-pay'));
             }
 
-            // Create sub-order
-            $sub_order = $this->create_sub_order($parent_order, $installment);
-            
-            // Log sub-order creation
+            // Get sub-order
+            $sub_order_id = $installment['sub_order_id'] ?? null;
+            $sub_order = $sub_order_id ? wc_get_order($sub_order_id) : null;
+            if (!$sub_order) {
+                throw new \Exception(__('Sub-order not found.', 'wc-flex-pay'));
+            }
+
+            // Log event
             $this->log_event(
                 $order_id,
                 sprintf(
-                    __('Created sub-order #%s for installment %d', 'wc-flex-pay'),
-                    $sub_order->get_order_number(),
-                    $installment_number
+                    __('Payment URL accessed for installment %d (Amount: %s) - Sub-order #%s', 'wc-flex-pay'),
+                    $installment_number,
+                    wc_price($installment['amount']),
+                    $sub_order->get_order_number()
                 ),
-                'order'
+                'system'
             );
 
-            // Redirect to sub-order checkout
+            // Redirect to sub-order payment page
             wp_redirect($sub_order->get_checkout_payment_url());
             exit;
 
@@ -439,47 +628,19 @@ class Payment {
             $result = $gateway->process_payment($sub_order->get_id());
 
             if ($result['result'] === 'success') {
-                // Update parent order installment
-                $payments = $this->get_order_payments($parent_order_id);
-                $payments['installments'][$installment_number - 1]['status'] = 'completed';
-                $payments['installments'][$installment_number - 1]['payment_date'] = current_time('mysql');
-                $payments['installments'][$installment_number - 1]['payment_method'] = $payment_method;
-                $payments['installments'][$installment_number - 1]['transaction_id'] = $sub_order->get_transaction_id();
-                $payments['installments'][$installment_number - 1]['payment_suborder'] = $sub_order->get_id();
-
-                // Update summary
-                $payments['summary']['paid_installments']++;
-                $payments['summary']['paid_amount'] += $sub_order->get_total();
+                // Let the Order class handle status updates via woocommerce_payment_complete hook
+                $sub_order->payment_complete();
                 
-                // Find next due date
-                $next_installment = null;
-                foreach ($payments['installments'] as $installment) {
-                    if ($installment['status'] === 'pending') {
-                        $next_installment = $installment;
-                        break;
-                    }
-                }
-                $payments['summary']['next_due_date'] = $next_installment ? $next_installment['due_date'] : null;
-
-                update_post_meta($parent_order_id, '_wcfp_payments', $payments);
-
-                // Log events
+                // Log event
                 $this->log_event(
                     $parent_order_id,
                     sprintf(
-                        __('Installment %d payment completed via sub-order #%s', 'wc-flex-pay'),
+                        __('Payment processed for installment %d via sub-order #%s', 'wc-flex-pay'),
                         $installment_number,
                         $sub_order->get_order_number()
                     ),
                     'payment'
                 );
-
-                // Check if all payments are completed
-                if ($this->are_all_payments_completed($parent_order_id)) {
-                    $parent_order = wc_get_order($parent_order_id);
-                    $parent_order->update_status('completed', __('All Flex Pay payments completed.', 'wc-flex-pay'));
-                    $this->log_event($parent_order_id, __('All installments completed.', 'wc-flex-pay'), 'system');
-                }
             }
 
             return $result;
@@ -772,5 +933,106 @@ class Payment {
      */
     public function get_payment_statuses() {
         return $this->statuses;
+    }
+
+    /**
+     * Add installment data to cart item
+     *
+     * @param array $cart_item_data
+     * @param int   $product_id
+     * @param int   $variation_id
+     * @return array
+     */
+    public function add_cart_item_data($cart_item_data, $product_id, $variation_id) {
+        if (isset($_GET['wcfp-pay']) && isset($_GET['installment'])) {
+            $order_id = absint($_GET['wcfp-pay']);
+            $installment_number = absint($_GET['installment']);
+            
+            $payments = get_post_meta($order_id, '_wcfp_payments', true);
+            if (!empty($payments['installments'][$installment_number - 1])) {
+                $installment = $payments['installments'][$installment_number - 1];
+                $cart_item_data['wcfp_installment'] = array(
+                    'parent_order_id' => $order_id,
+                    'installment_number' => $installment_number,
+                    'amount' => $installment['amount'],
+                    'due_date' => $installment['due_date']
+                );
+            }
+        }
+        return $cart_item_data;
+    }
+
+    /**
+     * Get cart item data from session
+     *
+     * @param array $cart_item
+     * @param array $values
+     * @return array
+     */
+    public function get_cart_item_from_session($cart_item, $values) {
+        if (isset($values['wcfp_installment'])) {
+            $cart_item['wcfp_installment'] = $values['wcfp_installment'];
+            $cart_item['data']->set_price($values['wcfp_installment']['amount']);
+        }
+        return $cart_item;
+    }
+
+    /**
+     * Add installment info to cart item display
+     *
+     * @param array $item_data
+     * @param array $cart_item
+     * @return array
+     */
+    public function get_item_data($item_data, $cart_item) {
+        if (isset($cart_item['wcfp_installment'])) {
+            $item_data[] = array(
+                'key' => __('Installment', 'wc-flex-pay'),
+                'value' => sprintf(
+                    /* translators: 1: installment number, 2: due date */
+                    __('#%1$d (Due: %2$s)', 'wc-flex-pay'),
+                    $cart_item['wcfp_installment']['installment_number'],
+                    date_i18n(get_option('date_format'), strtotime($cart_item['wcfp_installment']['due_date']))
+                )
+            );
+        }
+        return $item_data;
+    }
+
+    /**
+     * Update cart item prices before totals calculation
+     *
+     * @param WC_Cart $cart
+     */
+    public function before_calculate_totals($cart) {
+        if (is_admin() && !defined('DOING_AJAX')) {
+            return;
+        }
+
+        foreach ($cart->get_cart() as $cart_item) {
+            if (isset($cart_item['wcfp_installment'])) {
+                $cart_item['data']->set_price($cart_item['wcfp_installment']['amount']);
+            }
+        }
+    }
+
+    /**
+     * Display payment schedule on order details
+     *
+     * @param WC_Order $order Order object
+     */
+    public function display_payment_schedule($order) {
+        $is_admin = false;
+        include WCFP_PLUGIN_DIR . 'templates/order/payment-schedule.php';
+    }
+
+    /**
+     * Display admin payment schedule
+     *
+     * @param WC_Order $order Order object
+     */
+    public function display_admin_payment_schedule($order) {
+        $is_admin = true;
+        include WCFP_PLUGIN_DIR . 'templates/order/payment-schedule.php';
     }
 }

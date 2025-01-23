@@ -58,8 +58,7 @@ echo isset($form_start) ? $form_start : '';
                         <?php 
                         printf(
                             /* translators: %d: number of installments */
-                            esc_html__('in %d installments', 'wc-flex-pay'),
-                            $payments['summary']['total_installments']
+                            esc_html__('due today', 'wc-flex-pay'),
                         );
                         ?>
                     </small>
@@ -71,7 +70,7 @@ echo isset($form_start) ? $form_start : '';
 
 <div class="wcfp-payment-schedule" style="display: none;">
     <?php if ($overdue_exists) : ?>
-        <div class="wcfp-notice wcfp-notice-warning">
+        <div class="wcfp-notice wcfp-notice-warning mb-4">
             <?php esc_html_e('Past due payments are included in your initial payment.', 'wc-flex-pay'); ?>
         </div>
     <?php endif; ?>
