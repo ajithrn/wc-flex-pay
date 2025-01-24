@@ -46,11 +46,11 @@ class Order {
      */
     private $sub_order_status_map = array(
         'parent' => array(
-            'pending' => 'flex-pay-pending',
+            'pending' => 'pending',
             'processing' => 'flex-pay-partial',
-            'completed' => 'flex-pay-completed',
-            'failed' => 'flex-pay-failed',
-            'overdue' => 'flex-pay-overdue'
+            'completed' => 'completed',
+            'failed' => 'failed',
+            'overdue' => 'on-hold'
         ),
         'sub' => array(
             'pending' => 'pending',
@@ -229,8 +229,8 @@ class Order {
 
             $order->add_order_note($note);
 
-            // Set custom order status
-            $order->update_status('flex-pay-pending', __('Order has pending Flex Pay installments.', 'wc-flex-pay'));
+            // Set order status to pending
+            $order->update_status('pending', __('Order has pending Flex Pay installments.', 'wc-flex-pay'));
         }
     }
 
@@ -238,9 +238,20 @@ class Order {
      * Handle order status change
      */
     public function handle_order_status_change($order_id, $old_status, $new_status, $order) {
-        if ($new_status === 'flex-pay-completed') {
-            // Handle any additional tasks when flex pay is completed
-            do_action('wcfp_order_flex_pay_completed', $order_id, $old_status, $new_status, $order);
+        // Check if this is a flex pay order that was just completed
+        if ($new_status === 'completed') {
+            $has_flex_pay = false;
+            foreach ($order->get_items() as $item) {
+                if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                    $has_flex_pay = true;
+                    break;
+                }
+            }
+            
+            if ($has_flex_pay) {
+                // Handle any additional tasks when flex pay is completed
+                do_action('wcfp_order_flex_pay_completed', $order_id, $old_status, $new_status, $order);
+            }
         }
     }
 
@@ -343,15 +354,6 @@ class Order {
      * Register custom order statuses
      */
     public function register_custom_order_statuses() {
-        register_post_status('wc-flex-pay-pending', array(
-            'label' => _x('Flex Pay Pending', 'Order status', 'wc-flex-pay'),
-            'public' => true,
-            'exclude_from_search' => false,
-            'show_in_admin_all_list' => true,
-            'show_in_admin_status_list' => true,
-            'label_count' => _n_noop('Flex Pay Pending <span class="count">(%s)</span>', 'Flex Pay Pending <span class="count">(%s)</span>')
-        ));
-
         register_post_status('wc-flex-pay-partial', array(
             'label' => _x('Flex Pay Partial', 'Order status', 'wc-flex-pay'),
             'public' => true,
@@ -360,33 +362,6 @@ class Order {
             'show_in_admin_status_list' => true,
             'label_count' => _n_noop('Flex Pay Partial <span class="count">(%s)</span>', 'Flex Pay Partial <span class="count">(%s)</span>')
         ));
-
-        register_post_status('wc-flex-pay-overdue', array(
-            'label' => _x('Flex Pay Overdue', 'Order status', 'wc-flex-pay'),
-            'public' => true,
-            'exclude_from_search' => false,
-            'show_in_admin_all_list' => true,
-            'show_in_admin_status_list' => true,
-            'label_count' => _n_noop('Flex Pay Overdue <span class="count">(%s)</span>', 'Flex Pay Overdue <span class="count">(%s)</span>')
-        ));
-
-        register_post_status('wc-flex-pay-completed', array(
-            'label' => _x('Flex Pay Completed', 'Order status', 'wc-flex-pay'),
-            'public' => true,
-            'exclude_from_search' => false,
-            'show_in_admin_all_list' => true,
-            'show_in_admin_status_list' => true,
-            'label_count' => _n_noop('Flex Pay Completed <span class="count">(%s)</span>', 'Flex Pay Completed <span class="count">(%s)</span>')
-        ));
-
-        register_post_status('wc-flex-pay-failed', array(
-            'label' => _x('Flex Pay Failed', 'Order status', 'wc-flex-pay'),
-            'public' => true,
-            'exclude_from_search' => false,
-            'show_in_admin_all_list' => true,
-            'show_in_admin_status_list' => true,
-            'label_count' => _n_noop('Flex Pay Failed <span class="count">(%s)</span>', 'Flex Pay Failed <span class="count">(%s)</span>')
-        ));
     }
 
     /**
@@ -394,11 +369,7 @@ class Order {
      */
     public function add_custom_order_statuses($order_statuses) {
         $new_statuses = array(
-            'wc-flex-pay-pending' => _x('Flex Pay Pending', 'Order status', 'wc-flex-pay'),
-            'wc-flex-pay-partial' => _x('Flex Pay Partial', 'Order status', 'wc-flex-pay'),
-            'wc-flex-pay-overdue' => _x('Flex Pay Overdue', 'Order status', 'wc-flex-pay'),
-            'wc-flex-pay-completed' => _x('Flex Pay Completed', 'Order status', 'wc-flex-pay'),
-            'wc-flex-pay-failed' => _x('Flex Pay Failed', 'Order status', 'wc-flex-pay')
+            'wc-flex-pay-partial' => _x('Flex Pay Partial', 'Order status', 'wc-flex-pay')
         );
 
         return array_merge($order_statuses, $new_statuses);
@@ -409,9 +380,7 @@ class Order {
      */
     public function add_custom_order_status_for_payment($statuses) {
         $new_statuses = array(
-            'flex-pay-pending',
-            'flex-pay-partial',
-            'flex-pay-overdue'
+            'flex-pay-partial'
         );
         return array_merge($statuses, $new_statuses);
     }
@@ -749,7 +718,7 @@ class Order {
         }
 
         if ($all_completed) {
-            $order->update_status('flex-pay-completed', __('All Flex Pay installments completed.', 'wc-flex-pay'));
+            $order->update_status('completed', __('All Flex Pay installments completed.', 'wc-flex-pay'));
         } elseif ($completed_installments > 0) {
             $order->update_status('flex-pay-partial', sprintf(
                 /* translators: 1: completed installments, 2: total installments */
@@ -757,6 +726,9 @@ class Order {
                 $completed_installments,
                 $total_installments
             ));
+        } else {
+            // If no payments completed, ensure it's in pending status
+            $order->update_status('pending', __('Order has pending Flex Pay installments.', 'wc-flex-pay'));
         }
 
         } finally {

@@ -52,6 +52,7 @@ class Payment_Link extends \WC_Email {
             '{installment_number}' => '',
             '{payment_amount}' => '',
             '{due_date}' => '',
+            '{product_name}' => '',
         );
 
         // Call parent constructor
@@ -64,7 +65,7 @@ class Payment_Link extends \WC_Email {
      * @return string
      */
     public function get_default_subject() {
-        return __('Payment link for your order {order_number} - Installment {installment_number}', 'wc-flex-pay');
+        return __(' Your Payment Link for {product_name}: Installment #{installment_number}', 'wc-flex-pay');
     }
 
     /**
@@ -73,7 +74,7 @@ class Payment_Link extends \WC_Email {
      * @return string
      */
     public function get_default_heading() {
-        return __('Payment Link for Installment {installment_number}', 'wc-flex-pay');
+        return __('{product_name}:  Installment #{installment_number}', 'wc-flex-pay');
     }
 
     /**
@@ -109,6 +110,7 @@ class Payment_Link extends \WC_Email {
                                 get_option('date_format'),
                                 strtotime($installment['due_date'])
                             );
+                            $this->placeholders['{product_name}'] = $item->get_name();
                             break;
                         }
                     }
@@ -189,7 +191,7 @@ class Payment_Link extends \WC_Email {
             'subject' => array(
                 'title' => __('Subject', 'wc-flex-pay'),
                 'type' => 'text',
-                'description' => sprintf(__('Available placeholders: %s', 'wc-flex-pay'), '<code>{order_number}, {installment_number}, {payment_amount}, {due_date}</code>'),
+                'description' => sprintf(__('Available placeholders: %s', 'wc-flex-pay'), '<code>{order_number}, {installment_number}, {payment_amount}, {due_date}, {product_name}</code>'),
                 'placeholder' => $this->get_default_subject(),
                 'default' => '',
                 'desc_tip' => true,

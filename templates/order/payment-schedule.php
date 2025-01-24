@@ -55,7 +55,7 @@ foreach ($links as $installment_number => $link) {
 
     <?php if (!empty($completed_payments)) : ?>
         <h3><?php esc_html_e('Completed Payments', 'wc-flex-pay'); ?></h3>
-        <table class="woocommerce-table wcfp-payment-schedule completed">
+        <table class="woocommerce-table wcfp-payment-schedule p-0 completed">
             <thead>
                 <tr>
                     <th><?php esc_html_e('Installment', 'wc-flex-pay'); ?></th>
@@ -89,7 +89,7 @@ foreach ($links as $installment_number => $link) {
             );
             ?>
         </h3>
-        <table class="woocommerce-table wcfp-payment-schedule upcoming">
+        <table class="woocommerce-table wcfp-payment-schedule p-0 upcoming">
             <thead>
                 <tr>
                     <th><?php esc_html_e('Due Date', 'wc-flex-pay'); ?></th>

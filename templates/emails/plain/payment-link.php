@@ -20,13 +20,61 @@ printf(
     esc_html($order->get_order_number())
 );
 
-printf(
-    /* translators: %1$d: installment number, %2$s: payment amount, %3$s: due date */
-    esc_html__('This link is for installment %1$d, with an amount of %2$s, due on %3$s.', 'wc-flex-pay') . "\n\n",
-    esc_html($installment_number),
-    wc_price($payments['installments'][$installment_number - 1]['amount']),
-    date_i18n(get_option('date_format'), strtotime($payments['installments'][$installment_number - 1]['due_date']))
-);
+// Get payment data
+$total_amount = 0;
+$paid_amount = 0;
+$pending_amount = 0;
+$installment = null;
+
+foreach ($order->get_items() as $item) {
+    if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+        $payment_status = $item->get_meta('_wcfp_payment_status');
+        if (!empty($payment_status)) {
+            foreach ($payment_status as $status) {
+                $amount = $status['amount'] * $item->get_quantity();
+                $total_amount += $amount;
+                if ($status['status'] === 'completed') {
+                    $paid_amount += $amount;
+                } else {
+                    $pending_amount += $amount;
+                }
+            }
+            if (!empty($payment_status[$installment_number - 1])) {
+                $installment = $payment_status[$installment_number - 1];
+            }
+        }
+        break;
+    }
+}
+
+echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
+echo esc_html__('Payment Summary', 'wc-flex-pay') . "\n";
+echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n\n";
+
+echo esc_html__('Total Amount:', 'wc-flex-pay') . ' ' . wc_price($total_amount) . "\n";
+echo esc_html__('Amount Paid:', 'wc-flex-pay') . ' ' . wc_price($paid_amount) . "\n";
+echo esc_html__('Pending Amount:', 'wc-flex-pay') . ' ' . wc_price($pending_amount) . "\n\n";
+
+if ($installment) {
+    echo esc_html__('Current Installment Details:', 'wc-flex-pay') . "\n";
+    printf(
+        esc_html__('Installment #%d:', 'wc-flex-pay') . ' %s' . "\n",
+        $installment_number,
+        wc_price($installment['amount'])
+    );
+    echo esc_html__('Due Date:', 'wc-flex-pay') . ' ' . 
+         date_i18n(get_option('date_format'), strtotime($installment['due_date'])) . "\n\n";
+}
+
+if (!empty($link_data['sub_order_id'])) {
+    $sub_order = wc_get_order($link_data['sub_order_id']);
+    if ($sub_order) {
+        printf(
+            esc_html__('Sub-order: #%s', 'wc-flex-pay') . "\n\n",
+            esc_html($sub_order->get_order_number())
+        );
+    }
+}
 
 printf(
     /* translators: %s: expiry date */

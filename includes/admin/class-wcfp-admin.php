@@ -70,6 +70,7 @@ class Admin {
         add_action('wp_ajax_wcfp_create_sub_order', array($this, 'ajax_create_sub_order'));
         add_action('wp_ajax_wcfp_generate_payment_link', array($this, 'ajax_generate_payment_link'));
         add_action('wp_ajax_wcfp_send_payment_link', array($this, 'ajax_send_payment_link'));
+        add_action('wp_ajax_wcfp_set_payment_date', array($this, 'ajax_set_payment_date'));
         
         // Order list customization
         add_filter('manage_edit-shop_order_columns', array($this, 'add_order_list_columns'));
@@ -283,8 +284,18 @@ class Admin {
             return;
         }
 
-        $payments = $this->get_order_payments($order->get_id());
-        if (empty($payments)) {
+        $has_flex_pay = false;
+        foreach ($order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (!empty($payment_status)) {
+                    $has_flex_pay = true;
+                    break;
+                }
+            }
+        }
+
+        if (!$has_flex_pay) {
             return;
         }
 
@@ -348,17 +359,26 @@ class Admin {
             }
 
             // Show Flex Pay info for parent orders
-            $payments = $this->get_order_payments($order->get_id());
-            if (!empty($payments)) {
-                $completed = 0;
-                $total = count($payments);
-                
-                foreach ($payments as $payment) {
-                    if ($payment['status'] === 'completed') {
+            $completed = 0;
+            $total = 0;
+            
+            foreach ($order->get_items() as $item) {
+                if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                    continue;
+                }
+
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (empty($payment_status)) continue;
+
+                foreach ($payment_status as $status) {
+                    $total++;
+                    if ($status['status'] === 'completed') {
                         $completed++;
                     }
                 }
+            }
 
+            if ($total > 0) {
                 printf(
                     '<span class="wcfp-payments-badge">%s</span>',
                     sprintf(
@@ -471,29 +491,34 @@ class Admin {
     private function get_payment_report_data() {
         $payment_data = array();
         
-        // Get all orders with flex pay payments
+        // Get all orders
         $orders = wc_get_orders(array(
-            'meta_key' => '_wcfp_payments',
             'limit' => -1,
         ));
 
         foreach ($orders as $order) {
-            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
-            if (empty($payments)) continue;
+            foreach ($order->get_items() as $item) {
+                if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                    continue;
+                }
 
-            foreach ($payments as $payment_id => $payment) {
-                $payment_data[] = array_merge(
-                    $payment,
-                    array(
-                        'id' => $payment_id,
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (empty($payment_status)) continue;
+
+                foreach ($payment_status as $status) {
+                    $payment_data[] = array(
+                        'id' => $status['number'],
                         'order_id' => $order->get_id(),
                         'order_status' => $order->get_status(),
                         '_billing_first_name' => $order->get_billing_first_name(),
                         '_billing_last_name' => $order->get_billing_last_name(),
                         '_billing_email' => $order->get_billing_email(),
                         '_payment_method_title' => $order->get_payment_method_title(),
-                    )
-                );
+                        'amount' => $status['amount'],
+                        'due_date' => $status['due_date'],
+                        'status' => $status['status'],
+                    );
+                }
             }
         }
 
@@ -538,27 +563,36 @@ class Admin {
      */
     private function log_payment($payment_id, $message) {
         $orders = wc_get_orders(array(
-            'meta_key' => '_wcfp_payments',
             'limit' => -1,
         ));
 
         foreach ($orders as $order) {
-            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
-            if (!empty($payments) && isset($payments[$payment_id])) {
-                $logs = get_post_meta($order->get_id(), '_wcfp_payment_logs', true);
-                if (!is_array($logs)) {
-                    $logs = array();
+            foreach ($order->get_items() as $item) {
+                if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                    continue;
                 }
 
-                $logs[] = array(
-                    'payment_id' => $payment_id,
-                    'type' => 'info',
-                    'message' => $message,
-                    'created_at' => current_time('mysql')
-                );
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (empty($payment_status)) continue;
 
-                update_post_meta($order->get_id(), '_wcfp_payment_logs', $logs);
-                break;
+                foreach ($payment_status as $status) {
+                    if ($status['number'] === $payment_id) {
+                        $logs = get_post_meta($order->get_id(), '_wcfp_payment_logs', true);
+                        if (!is_array($logs)) {
+                            $logs = array();
+                        }
+
+                        $logs[] = array(
+                            'payment_id' => $payment_id,
+                            'type' => 'info',
+                            'message' => $message,
+                            'created_at' => current_time('mysql')
+                        );
+
+                        update_post_meta($order->get_id(), '_wcfp_payment_logs', $logs);
+                        return;
+                    }
+                }
             }
         }
     }
@@ -600,7 +634,50 @@ class Admin {
         }
 
         try {
-            do_action('wcfp_process_payment', $payment_id);
+            // Get all orders with flex pay enabled items
+            $orders = wc_get_orders(array(
+                'limit' => -1,
+            ));
+
+            $payment_found = false;
+            foreach ($orders as $order) {
+                foreach ($order->get_items() as $item) {
+                    if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                        continue;
+                    }
+
+                    $payment_status = $item->get_meta('_wcfp_payment_status');
+                    if (empty($payment_status)) continue;
+
+                    foreach ($payment_status as $index => $status) {
+                        if ($status['number'] === $payment_id && $status['status'] === 'pending') {
+                            // Update payment status
+                            $payment_status[$index]['status'] = 'completed';
+                            $payment_status[$index]['payment_date'] = current_time('Y-m-d');
+                            $payment_status[$index]['transaction_id'] = uniqid('wcfp_');
+                            
+                            $item->update_meta_data('_wcfp_payment_status', $payment_status);
+                            $item->save();
+
+                            // Add payment note
+                            $order->add_order_note(sprintf(
+                                /* translators: 1: installment number, 2: amount */
+                                __('Processed Flex Pay payment for installment %1$d: %2$s', 'wc-flex-pay'),
+                                $status['number'],
+                                wc_price($status['amount'])
+                            ));
+
+                            $payment_found = true;
+                            break 3;
+                        }
+                    }
+                }
+            }
+
+            if (!$payment_found) {
+                throw new \Exception(__('Payment not found or already processed.', 'wc-flex-pay'));
+            }
+
             wp_send_json_success(__('Payment processed successfully.', 'wc-flex-pay'));
         } catch (\Exception $e) {
             wp_send_json_error($e->getMessage());
@@ -759,6 +836,71 @@ class Admin {
     }
 
     /**
+     * Set payment date via AJAX
+     */
+    public function ajax_set_payment_date() {
+        check_ajax_referer('wcfp-admin', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(__('Permission denied.', 'wc-flex-pay'));
+        }
+
+        $payment_id = isset($_POST['payment_id']) ? absint($_POST['payment_id']) : 0;
+        $payment_date = isset($_POST['payment_date']) ? sanitize_text_field($_POST['payment_date']) : '';
+
+        if (!$payment_id || !$payment_date) {
+            wp_send_json_error(__('Invalid parameters.', 'wc-flex-pay'));
+        }
+
+        try {
+            // Get all orders with flex pay enabled items
+            $orders = wc_get_orders(array(
+                'limit' => -1,
+            ));
+
+            $payment_found = false;
+            foreach ($orders as $order) {
+                foreach ($order->get_items() as $item) {
+                    if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                        continue;
+                    }
+
+                    $payment_status = $item->get_meta('_wcfp_payment_status');
+                    if (empty($payment_status)) continue;
+
+                    foreach ($payment_status as $index => $status) {
+                        if ($status['number'] === $payment_id && $status['status'] === 'completed') {
+                            // Update payment date
+                            $payment_status[$index]['payment_date'] = $payment_date;
+                            $item->update_meta_data('_wcfp_payment_status', $payment_status);
+                            $item->save();
+
+                            // Add order note
+                            $order->add_order_note(sprintf(
+                                /* translators: 1: installment number, 2: payment date */
+                                __('Set payment date for installment %1$d to %2$s', 'wc-flex-pay'),
+                                $status['number'],
+                                date_i18n(get_option('date_format'), strtotime($payment_date))
+                            ));
+
+                            $payment_found = true;
+                            break 3;
+                        }
+                    }
+                }
+            }
+
+            if (!$payment_found) {
+                throw new \Exception(__('Payment not found or not completed.', 'wc-flex-pay'));
+            }
+
+            wp_send_json_success(__('Payment date set successfully.', 'wc-flex-pay'));
+        } catch (\Exception $e) {
+            wp_send_json_error($e->getMessage());
+        }
+    }
+
+    /**
      * Display admin notices
      */
     public function admin_notices() {
@@ -766,9 +908,8 @@ class Admin {
             return;
         }
 
-        // Get all orders with flex pay payments
+        // Get all orders
         $orders = wc_get_orders(array(
-            'meta_key' => '_wcfp_payments',
             'limit' => -1,
         ));
 
@@ -776,12 +917,18 @@ class Admin {
         $current_date = current_time('mysql');
 
         foreach ($orders as $order) {
-            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
-            if (empty($payments)) continue;
+            foreach ($order->get_items() as $item) {
+                if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                    continue;
+                }
 
-            foreach ($payments as $payment) {
-                if ($payment['status'] === 'pending' && strtotime($payment['due_date']) < strtotime($current_date)) {
-                    $overdue_count++;
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (empty($payment_status)) continue;
+
+                foreach ($payment_status as $status) {
+                    if ($status['status'] === 'pending' && strtotime($status['due_date']) < strtotime($current_date)) {
+                        $overdue_count++;
+                    }
                 }
             }
         }

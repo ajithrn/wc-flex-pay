@@ -32,17 +32,17 @@ class Notification {
         add_filter('woocommerce_email_classes', array($this, 'register_emails'));
         
         // Payment Status Notifications
-        add_action('wcfp_payment_status_completed', array($this, 'send_payment_completed_notification'));
-        add_action('wcfp_payment_status_failed', array($this, 'send_payment_failed_notification'));
-        add_action('wcfp_payment_status_overdue', array($this, 'send_payment_overdue_notification'));
+        add_action('woocommerce_order_status_completed', array($this, 'send_payment_completed_notification'));
+        add_action('woocommerce_order_status_failed', array($this, 'send_payment_failed_notification'));
+        add_action('woocommerce_order_status_on-hold', array($this, 'send_payment_overdue_notification'));
         
         // Payment Reminders
         add_action('init', array($this, 'schedule_reminders'));
         add_action('wcfp_payment_reminder', array($this, 'send_payment_reminder'));
         
         // Admin Notifications
-        add_action('wcfp_payment_status_failed', array($this, 'notify_admin_payment_failed'));
-        add_action('wcfp_payment_status_overdue', array($this, 'notify_admin_payment_overdue'));
+        add_action('woocommerce_order_status_failed', array($this, 'notify_admin_payment_failed'));
+        add_action('woocommerce_order_status_on-hold', array($this, 'notify_admin_payment_overdue'));
     }
 
 
@@ -123,30 +123,36 @@ class Notification {
      *
      * @param int $payment_id
      */
-    public function send_payment_completed_notification($payment_id) {
+    public function send_payment_completed_notification($order_id) {
         if (!$this->is_notification_enabled('completed')) {
             return;
         }
 
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
+        }
+
+        // Check if this is a Flex Pay order
+        $has_flex_pay = false;
+        foreach ($order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $has_flex_pay = true;
+                break;
+            }
+        }
+
+        if (!$has_flex_pay) {
+            return;
+        }
+
         try {
-            $payment = $this->get_payment($payment_id);
-            if (!$payment) {
-                throw new \Exception('Payment not found');
-            }
-
-            $order = wc_get_order($payment['order_id']);
-            if (!$order) {
-                throw new \Exception('Order not found');
-            }
-
             $mailer = WC()->mailer();
             $email = new \WCFP_Email_Payment_Complete();
-            
-            $email->trigger($payment_id, $order);
-
-            $this->log_notification('completed_sent', $payment_id);
+            $email->trigger($order_id);
+            $this->log_notification('completed_sent', $order_id);
         } catch (\Exception $e) {
-            $this->log_error($e->getMessage(), array('payment_id' => $payment_id));
+            $this->log_error($e->getMessage(), array('order_id' => $order_id));
         }
     }
 
@@ -155,30 +161,36 @@ class Notification {
      *
      * @param int $payment_id
      */
-    public function send_payment_failed_notification($payment_id) {
+    public function send_payment_failed_notification($order_id) {
         if (!$this->is_notification_enabled('failed')) {
             return;
         }
 
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
+        }
+
+        // Check if this is a Flex Pay order
+        $has_flex_pay = false;
+        foreach ($order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $has_flex_pay = true;
+                break;
+            }
+        }
+
+        if (!$has_flex_pay) {
+            return;
+        }
+
         try {
-            $payment = $this->get_payment($payment_id);
-            if (!$payment) {
-                throw new \Exception('Payment not found');
-            }
-
-            $order = wc_get_order($payment['order_id']);
-            if (!$order) {
-                throw new \Exception('Order not found');
-            }
-
             $mailer = WC()->mailer();
             $email = new \WCFP_Email_Payment_Failed();
-            
-            $email->trigger($payment_id, $order);
-
-            $this->log_notification('failed_sent', $payment_id);
+            $email->trigger($order_id);
+            $this->log_notification('failed_sent', $order_id);
         } catch (\Exception $e) {
-            $this->log_error($e->getMessage(), array('payment_id' => $payment_id));
+            $this->log_error($e->getMessage(), array('order_id' => $order_id));
         }
     }
 
@@ -187,30 +199,36 @@ class Notification {
      *
      * @param int $payment_id
      */
-    public function send_payment_overdue_notification($payment_id) {
+    public function send_payment_overdue_notification($order_id) {
         if (!$this->is_notification_enabled('overdue')) {
             return;
         }
 
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
+        }
+
+        // Check if this is a Flex Pay order
+        $has_flex_pay = false;
+        foreach ($order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $has_flex_pay = true;
+                break;
+            }
+        }
+
+        if (!$has_flex_pay) {
+            return;
+        }
+
         try {
-            $payment = $this->get_payment($payment_id);
-            if (!$payment) {
-                throw new \Exception('Payment not found');
-            }
-
-            $order = wc_get_order($payment['order_id']);
-            if (!$order) {
-                throw new \Exception('Order not found');
-            }
-
             $mailer = WC()->mailer();
             $email = new \WCFP_Email_Payment_Overdue();
-            
-            $email->trigger($payment_id, $order);
-
-            $this->log_notification('overdue_sent', $payment_id);
+            $email->trigger($order_id);
+            $this->log_notification('overdue_sent', $order_id);
         } catch (\Exception $e) {
-            $this->log_error($e->getMessage(), array('payment_id' => $payment_id));
+            $this->log_error($e->getMessage(), array('order_id' => $order_id));
         }
     }
 
@@ -219,22 +237,30 @@ class Notification {
      *
      * @param int $payment_id
      */
-    public function notify_admin_payment_failed($payment_id) {
+    public function notify_admin_payment_failed($order_id) {
         if (!$this->is_notification_enabled('admin_failed')) {
             return;
         }
 
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
+        }
+
+        // Check if this is a Flex Pay order
+        $has_flex_pay = false;
+        foreach ($order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $has_flex_pay = true;
+                break;
+            }
+        }
+
+        if (!$has_flex_pay) {
+            return;
+        }
+
         try {
-            $payment = $this->get_payment($payment_id);
-            if (!$payment) {
-                throw new \Exception('Payment not found');
-            }
-
-            $order = wc_get_order($payment['order_id']);
-            if (!$order) {
-                throw new \Exception('Order not found');
-            }
-
             $admin_email = $this->get_admin_email();
             
             $subject = sprintf(
@@ -244,17 +270,16 @@ class Notification {
             );
             
             $message = sprintf(
-                __('Payment of %s for order #%s has failed. Please check the order for more details.', 'wc-flex-pay'),
-                wc_price($payment['amount']),
+                __('Payment for order #%s has failed. Please check the order for more details.', 'wc-flex-pay'),
                 $order->get_order_number()
             );
 
             $headers = array('Content-Type: text/html; charset=UTF-8');
             wp_mail($admin_email, $subject, $message, $headers);
 
-            $this->log_notification('admin_failed_sent', $payment_id);
+            $this->log_notification('admin_failed_sent', $order_id);
         } catch (\Exception $e) {
-            $this->log_error($e->getMessage(), array('payment_id' => $payment_id));
+            $this->log_error($e->getMessage(), array('order_id' => $order_id));
         }
     }
 
@@ -263,22 +288,30 @@ class Notification {
      *
      * @param int $payment_id
      */
-    public function notify_admin_payment_overdue($payment_id) {
+    public function notify_admin_payment_overdue($order_id) {
         if (!$this->is_notification_enabled('admin_overdue')) {
             return;
         }
 
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
+        }
+
+        // Check if this is a Flex Pay order
+        $has_flex_pay = false;
+        foreach ($order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $has_flex_pay = true;
+                break;
+            }
+        }
+
+        if (!$has_flex_pay) {
+            return;
+        }
+
         try {
-            $payment = $this->get_payment($payment_id);
-            if (!$payment) {
-                throw new \Exception('Payment not found');
-            }
-
-            $order = wc_get_order($payment['order_id']);
-            if (!$order) {
-                throw new \Exception('Order not found');
-            }
-
             $admin_email = $this->get_admin_email();
             
             $subject = sprintf(
@@ -288,18 +321,16 @@ class Notification {
             );
             
             $message = sprintf(
-                __('Payment of %s for order #%s is overdue (due date: %s). Please check the order for more details.', 'wc-flex-pay'),
-                wc_price($payment['amount']),
-                $order->get_order_number(),
-                date_i18n(get_option('date_format'), strtotime($payment['due_date']))
+                __('Payment for order #%s is overdue. Please check the order for more details.', 'wc-flex-pay'),
+                $order->get_order_number()
             );
 
             $headers = array('Content-Type: text/html; charset=UTF-8');
             wp_mail($admin_email, $subject, $message, $headers);
 
-            $this->log_notification('admin_overdue_sent', $payment_id);
+            $this->log_notification('admin_overdue_sent', $order_id);
         } catch (\Exception $e) {
-            $this->log_error($e->getMessage(), array('payment_id' => $payment_id));
+            $this->log_error($e->getMessage(), array('order_id' => $order_id));
         }
     }
 

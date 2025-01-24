@@ -28,7 +28,7 @@ class Payment {
         'completed'  => 'Completed',
         'failed'     => 'Failed',
         'cancelled'  => 'Cancelled',
-        'overdue'    => 'Overdue',
+        'overdue'    => 'On Hold',
     );
 
     /**
@@ -476,54 +476,53 @@ class Payment {
         $grace_period = absint(get_option('wcfp_overdue_grace_period', 3));
         $overdue_date = date('Y-m-d H:i:s', strtotime("-{$grace_period} days"));
 
-        // Get all orders with flex pay payments
+        // Get all orders
         $orders = wc_get_orders(array(
-            'meta_key' => '_wcfp_payments',
             'limit' => -1,
         ));
 
         foreach ($orders as $order) {
-            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
-            if (empty($payments) || empty($payments['installments'])) continue;
+            foreach ($order->get_items() as $item) {
+                if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                    continue;
+                }
 
-            foreach ($payments['installments'] as $index => $installment) {
-                if ($installment['status'] === 'pending' && strtotime($installment['due_date']) < strtotime($overdue_date)) {
-                    try {
-                        // Update installment status
-                        $payments['installments'][$index]['status'] = 'overdue';
-                        update_post_meta($order->get_id(), '_wcfp_payments', $payments);
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (empty($payment_status)) continue;
 
-                        // Log event
-                        $this->log_event(
-                            $order->get_id(),
-                            sprintf(
+                foreach ($payment_status as $index => $status) {
+                    if ($status['status'] === 'pending' && strtotime($status['due_date']) < strtotime($overdue_date)) {
+                        try {
+                            // Update order status to on-hold
+                            $order->update_status('on-hold', sprintf(
                                 __('Installment %d payment of %s is overdue (due date: %s).', 'wc-flex-pay'),
-                                $installment['number'],
-                                wc_price($installment['amount']),
-                                date_i18n(get_option('date_format'), strtotime($installment['due_date']))
-                            ),
-                            'payment'
-                        );
+                                $status['number'],
+                                wc_price($status['amount']),
+                                date_i18n(get_option('date_format'), strtotime($status['due_date']))
+                            ));
 
-                        // Send overdue notification
-                        do_action('wcfp_payment_overdue', $order->get_id(), $installment['number']);
+                            // Update payment status
+                            $payment_status[$index]['status'] = 'overdue';
+                            $item->update_meta_data('_wcfp_payment_status', $payment_status);
+                            $item->save();
 
-                        // Send email notification
-                        Emails::send_payment_overdue($order->get_id(), $installment['number']);
-                        $this->log_event(
-                            $order->get_id(),
-                            sprintf(
-                                __('Sent overdue payment notification for installment %d.', 'wc-flex-pay'),
-                                $installment['number']
-                            ),
-                            'email'
-                        );
+                            // Send email notification
+                            Emails::send_payment_overdue($order->get_id(), $status['number']);
+                            $this->log_event(
+                                $order->get_id(),
+                                sprintf(
+                                    __('Sent overdue payment notification for installment %d.', 'wc-flex-pay'),
+                                    $status['number']
+                                ),
+                                'email'
+                            );
 
-                    } catch (\Exception $e) {
-                        $this->log_error($e->getMessage(), array(
-                            'order_id' => $order->get_id(),
-                            'installment' => $installment['number']
-                        ));
+                        } catch (\Exception $e) {
+                            $this->log_error($e->getMessage(), array(
+                                'order_id' => $order->get_id(),
+                                'installment' => $status['number']
+                            ));
+                        }
                     }
                 }
             }
@@ -673,14 +672,28 @@ class Payment {
      * @return array|false Returns array with installment number and details, or false if none found
      */
     public function get_next_pending_payment($order_id) {
-        $payments = get_post_meta($order_id, '_wcfp_payments', true);
-        if (empty($payments) || empty($payments['installments'])) {
+        $order = wc_get_order($order_id);
+        if (!$order) {
             return false;
         }
 
-        $pending_installments = array_filter($payments['installments'], function($installment) {
-            return $installment['status'] === 'pending';
-        });
+        $pending_installments = array();
+        foreach ($order->get_items() as $item) {
+            if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                continue;
+            }
+
+            $payment_status = $item->get_meta('_wcfp_payment_status');
+            if (empty($payment_status)) continue;
+
+            foreach ($payment_status as $status) {
+                if ($status['status'] === 'pending') {
+                    $pending_installments[] = array_merge($status, array(
+                        'product_name' => $item->get_name()
+                    ));
+                }
+            }
+        }
 
         if (empty($pending_installments)) {
             return false;
@@ -702,18 +715,29 @@ class Payment {
      * @return bool
      */
     public function are_all_payments_completed($order_id) {
-        $payments = get_post_meta($order_id, '_wcfp_payments', true);
-        if (empty($payments) || empty($payments['installments'])) {
+        $order = wc_get_order($order_id);
+        if (!$order) {
             return false;
         }
 
-        foreach ($payments['installments'] as $installment) {
-            if ($installment['status'] !== 'completed') {
-                return false;
+        $has_installments = false;
+        foreach ($order->get_items() as $item) {
+            if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                continue;
+            }
+
+            $payment_status = $item->get_meta('_wcfp_payment_status');
+            if (empty($payment_status)) continue;
+
+            $has_installments = true;
+            foreach ($payment_status as $status) {
+                if ($status['status'] !== 'completed') {
+                    return false;
+                }
             }
         }
 
-        return true;
+        return $has_installments;
     }
 
     /**
@@ -729,19 +753,36 @@ class Payment {
             throw new \Exception(__('Invalid payment status.', 'wc-flex-pay'));
         }
 
-        $payments = $this->get_order_payments($order_id);
-        if (empty($payments) || empty($payments['installments'][$installment_number - 1])) {
-            throw new \Exception(__('Installment not found.', 'wc-flex-pay'));
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            throw new \Exception(__('Order not found.', 'wc-flex-pay'));
         }
 
-        // Update installment status
-        $payments['installments'][$installment_number - 1]['status'] = $status;
-        
-        // Update summary
-        $this->update_payment_summary($order_id, $payments);
+        $installment_found = false;
+        foreach ($order->get_items() as $item) {
+            if ('yes' !== $item->get_meta('_wcfp_enabled') || 'installment' !== $item->get_meta('_wcfp_payment_type')) {
+                continue;
+            }
 
-        // Save changes
-        update_post_meta($order_id, '_wcfp_payments', $payments);
+            $payment_status = $item->get_meta('_wcfp_payment_status');
+            if (empty($payment_status)) continue;
+
+            foreach ($payment_status as $index => $payment) {
+                if ($payment['number'] === $installment_number) {
+                    // Update payment status
+                    $payment_status[$index]['status'] = $status;
+                    $item->update_meta_data('_wcfp_payment_status', $payment_status);
+                    $item->save();
+
+                    $installment_found = true;
+                    break 2;
+                }
+            }
+        }
+
+        if (!$installment_found) {
+            throw new \Exception(__('Installment not found.', 'wc-flex-pay'));
+        }
 
         // Trigger actions
         do_action('wcfp_payment_status_' . $status, $order_id, $installment_number);

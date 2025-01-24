@@ -1,4 +1,34 @@
 # Changelog
+
+## [1.5.0] - 2025-01-24
+### Added
+- Enhanced payment summary in emails with total amount, paid amount, and pending amount
+- Total amount statistics in dashboard widgets
+- Payment date management system
+- Improved installment tracking and display
+
+### Changed
+- Switched to order item meta for payment status storage
+- Updated payment link email format:
+  - New subject format: "Payment Link for {product_name} - Installment #{number}"
+  - New heading format: "{product_name} Installment #{number}"
+  - Added comprehensive payment summary section
+- Enhanced dashboard organization:
+  - Latest orders first sorting
+  - Better installment number display
+  - Improved payment status tracking
+- Streamlined order status handling:
+  - Simplified status workflow
+  - Better integration with WooCommerce statuses
+  - Updated notification triggers
+
+### Enhanced
+- Payment processing system reliability
+- Dashboard statistics with monetary amounts
+- Email templates with better formatting
+- Order status management
+- Payment tracking accuracy
+
 ## [1.4.1] - 2025-01-23
 ### Changed
 - Removed Action colum from Upcoming table
