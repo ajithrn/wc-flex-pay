@@ -11,7 +11,7 @@
  * Plugin Name: WC Flex Pay
  * Plugin URI:  https://kwirx.com/wc-flex-pay
  * Description: Enable selling products with scheduled partial payments in WooCommerce
- * Version:     1.5.0
+ * Version:     1.6.0
  * Author:      Ajith R N
  * Author URI:  https://kwirx.com
  * Text Domain: wc-flex-pay
@@ -37,7 +37,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants.
-define('WCFP_VERSION', '1.5.0');
+define('WCFP_VERSION', '1.6.0');
 define('WCFP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WCFP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WCFP_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -45,6 +45,11 @@ define('WCFP_PLUGIN_BASENAME', plugin_basename(__FILE__));
 // Debug mode constant.
 if (!defined('WCFP_DEBUG')) {
     define('WCFP_DEBUG', false);
+}
+
+// Template paths
+if (!defined('WCFP_TEMPLATE_PATH')) {
+    define('WCFP_TEMPLATE_PATH', 'wc-flex-pay/');
 }
 
 /**
@@ -175,7 +180,11 @@ final class WC_Flex_Pay {
         // Initialize core components
         new \WCFP\Product();
         new \WCFP\Order();
+        new \WCFP\Notification();
         new \WCFP\Emails();
+
+        // Add template include filter
+        add_filter('woocommerce_locate_template', array($this, 'locate_template'), 20, 3);
 
         // Admin
         if (is_admin()) {
@@ -272,7 +281,47 @@ final class WC_Flex_Pay {
             
             $logger = wc_get_logger();
             $logger->debug($message, array('source' => 'wc-flex-pay'));
+
+            // Also log to error log for immediate visibility
+            error_log('[WC Flex Pay] ' . $message);
         }
+    }
+
+    /**
+     * Locate template files
+     *
+     * @param string $template      Template file
+     * @param string $template_name Template name
+     * @param string $template_path Template path
+     * @return string
+     */
+    public function locate_template($template, $template_name, $template_path) {
+        // Only look for our templates
+        if (strpos($template_name, 'wcfp_') === false && strpos($template_name, 'wc-flex-pay/') === false) {
+            return $template;
+        }
+
+        // Remove wcfp_ prefix if present
+        $template_name = str_replace('wcfp_', '', $template_name);
+
+        // Get template paths
+        $plugin_path = WCFP_PLUGIN_DIR . 'templates/';
+        $theme_path = get_stylesheet_directory() . '/' . WCFP_TEMPLATE_PATH;
+
+        // Look within passed path within the theme
+        $template = locate_template(array(
+            WCFP_TEMPLATE_PATH . $template_name,
+            $template_name,
+        ));
+
+        // Get the template from this plugin if not found in theme
+        if (!$template && file_exists($plugin_path . $template_name)) {
+            $template = $plugin_path . $template_name;
+        }
+
+        self::log("Template lookup: {$template_name} -> {$template}");
+
+        return $template;
     }
 }
 

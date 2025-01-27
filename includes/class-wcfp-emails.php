@@ -33,20 +33,8 @@ class Emails {
      * @return array
      */
     public function register_emails($email_classes) {
-        // Include email classes
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-complete.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-failed.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-reminder.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-overdue.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-link.php';
-
-        // Add email classes
-        $email_classes['WCFP_Email_Payment_Complete'] = new \WCFP_Email_Payment_Complete();
-        $email_classes['WCFP_Email_Payment_Failed'] = new \WCFP_Email_Payment_Failed();
-        $email_classes['WCFP_Email_Payment_Reminder'] = new \WCFP_Email_Payment_Reminder();
-        $email_classes['WCFP_Email_Payment_Overdue'] = new \WCFP_Email_Payment_Overdue();
-        $email_classes['WCFP_Email_Payment_Link'] = new Emails\Payment_Link();
-
+        // Email classes are registered in the Notification class
+        // This class is kept for backward compatibility
         return $email_classes;
     }
 
@@ -72,42 +60,45 @@ class Emails {
      * @param int      $payment_id Payment ID.
      * @param WC_Order $order      Order object.
      */
-    public static function send_payment_complete($payment_id, $order) {
-        do_action('wcfp_payment_complete_notification', $payment_id, $order);
-        WC()->mailer()->get_emails()['WCFP_Email_Payment_Complete']->trigger($payment_id, $order);
+    public static function send_payment_complete($order_id, $installment_number, $payment_data = array()) {
+        do_action('wcfp_payment_complete_notification', $order_id, $installment_number, $payment_data);
+        WC()->mailer()->get_emails()['WCFP_Email_Payment_Complete']->trigger($order_id, $installment_number, $payment_data);
     }
 
     /**
      * Send payment failed email
      *
-     * @param int      $payment_id Payment ID.
-     * @param WC_Order $order      Order object.
+     * @param int   $order_id Order ID
+     * @param int   $installment_number Installment number
+     * @param array $payment_data Payment data
      */
-    public static function send_payment_failed($payment_id, $order) {
-        do_action('wcfp_payment_failed_notification', $payment_id, $order);
-        WC()->mailer()->get_emails()['WCFP_Email_Payment_Failed']->trigger($payment_id, $order);
+    public static function send_payment_failed($order_id, $installment_number, $payment_data = array()) {
+        do_action('wcfp_payment_failed_notification', $order_id, $installment_number, $payment_data);
+        WC()->mailer()->get_emails()['WCFP_Email_Payment_Failed']->trigger($order_id, $installment_number, $payment_data);
     }
 
     /**
      * Send payment reminder email
      *
-     * @param int      $payment_id Payment ID.
-     * @param WC_Order $order      Order object.
+     * @param int   $order_id Order ID
+     * @param int   $installment_number Installment number
+     * @param array $payment_data Payment data
      */
-    public static function send_payment_reminder($payment_id, $order) {
-        do_action('wcfp_payment_reminder_notification', $payment_id, $order);
-        WC()->mailer()->get_emails()['WCFP_Email_Payment_Reminder']->trigger($payment_id, $order);
+    public static function send_payment_reminder($order_id, $installment_number, $payment_data = array()) {
+        do_action('wcfp_payment_reminder_notification', $order_id, $installment_number, $payment_data);
+        WC()->mailer()->get_emails()['WCFP_Email_Payment_Reminder']->trigger($order_id, $installment_number, $payment_data);
     }
 
     /**
      * Send payment overdue email
      *
-     * @param int      $payment_id Payment ID.
-     * @param WC_Order $order      Order object.
+     * @param int   $order_id Order ID
+     * @param int   $installment_number Installment number
+     * @param array $payment_data Payment data
      */
-    public static function send_payment_overdue($payment_id, $order) {
-        do_action('wcfp_payment_overdue_notification', $payment_id, $order);
-        WC()->mailer()->get_emails()['WCFP_Email_Payment_Overdue']->trigger($payment_id, $order);
+    public static function send_payment_overdue($order_id, $installment_number, $payment_data = array()) {
+        do_action('wcfp_payment_overdue_notification', $order_id, $installment_number, $payment_data);
+        WC()->mailer()->get_emails()['WCFP_Email_Payment_Overdue']->trigger($order_id, $installment_number, $payment_data);
     }
 
     /**

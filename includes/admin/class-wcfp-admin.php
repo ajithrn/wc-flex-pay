@@ -813,12 +813,30 @@ class Admin {
             $payment_manager = new \WCFP\Payment();
             $link = $payment_manager->generate_payment_link($order_id, $installment);
 
-            // Send email
+            // Get mailer and registered emails
             $mailer = WC()->mailer();
-            $email = new \WCFP\Emails\Payment_Link($mailer);
-            $email->trigger($order_id, $installment, $link);
+            $emails = $mailer->get_emails();
 
-            // Log event
+            // Check if our email class is registered
+            if (!isset($emails['wcfp_payment_link'])) {
+                throw new \Exception(__('Payment link email class not found.', 'wc-flex-pay'));
+            }
+
+            // Trigger email
+            $emails['wcfp_payment_link']->trigger($order_id, $installment, $link);
+
+            // Add order note
+            $order->add_order_note(
+                sprintf(
+                    __('Payment link email sent for installment #%d to %s', 'wc-flex-pay'),
+                    $installment,
+                    $order->get_billing_email()
+                ),
+                false,
+                true
+            );
+
+            // Log event with more context
             $payment_manager->log_event(
                 $order_id,
                 sprintf(
@@ -826,7 +844,12 @@ class Admin {
                     $installment,
                     $order->get_billing_email()
                 ),
-                'email'
+                'email',
+                array(
+                    'link_data' => $link,
+                    'email_to' => $order->get_billing_email(),
+                    'installment' => $installment
+                )
             );
 
             wp_send_json_success(__('Payment link sent successfully.', 'wc-flex-pay'));

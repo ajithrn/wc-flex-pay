@@ -1,5 +1,54 @@
 # Changelog
 
+## [1.6.0] - 2025-01-27
+### Added
+- Payment date management system with admin controls
+- Enhanced payment tracking with order item meta storage
+- Improved dashboard with monetary statistics
+- Extended grace period settings for overdue payments
+- Comprehensive payment summary in emails
+- New base email class for better email handling
+- Partial templates for reusable email components:
+  - Action buttons template
+  - Order details template
+  - Payment summary template
+- Template debugging and improved error logging
+- Enhanced template path handling system
+
+### Changed
+- Switched to order item meta for payment status storage
+- Updated payment link email templates:
+  - Product name in subject and heading
+  - Enhanced payment summary section
+  - Better formatting and organization
+- Streamlined order status handling:
+  - Better WooCommerce status integration
+  - Simplified status workflow
+  - Updated notification triggers
+- Enhanced dashboard organization:
+  - Latest orders first sorting
+  - Improved payment status tracking
+  - Better installment number display
+- Improved email registration and handling:
+  - Better email class initialization
+  - Enhanced error handling for emails
+  - Improved template loading system
+- Enhanced template organization:
+  - Added common styles template
+  - Better template file structure
+  - Improved template fallback system
+
+### Enhanced
+- Payment processing system reliability
+- Email notification system with better templates
+- Dashboard statistics with monetary amounts
+- Order status management workflow
+- Payment tracking accuracy
+- Template system with better organization
+- Debug mode with improved logging
+- Error handling and validation
+- Template path resolution
+
 ## [1.5.0] - 2025-01-24
 ### Added
 - Enhanced payment summary in emails with total amount, paid amount, and pending amount

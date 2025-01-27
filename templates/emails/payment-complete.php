@@ -1,152 +1,94 @@
 <?php
 /**
- * Payment Complete email
- *
- * This template can be overridden by copying it to yourtheme/woocommerce/emails/payment-complete.php.
+ * Payment Complete Email Template (HTML)
  *
  * @package WC_Flex_Pay\Templates\Emails
- * @version 1.0.0
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-// Security check
-if (!isset($order) || !isset($payment) || !isset($email)) {
-    return;
-}
-
-$payment_manager = new \WCFP\Payment();
-$remaining_payments = $payment_manager->get_order_payments($order->get_id());
-$remaining_payments = array_filter($remaining_payments, function($p) {
-    return $p['status'] === 'pending';
-});
-
-$next_payment = reset($remaining_payments);
-$total_remaining = array_sum(array_column($remaining_payments, 'amount'));
+// Include common styles
+include_once WCFP_PLUGIN_DIR . 'templates/emails/styles/common.php';
 
 /*
  * @hooked WC_Emails::email_header() Output the email header
  */
 do_action('woocommerce_email_header', $email_heading, $email);
+
+// Prepare payment data
+$payment_data = array(
+    'total_amount' => 0,
+    'paid_amount' => 0,
+    'pending_amount' => 0,
+    'current_installment' => null,
+    'sub_order_id' => $link_data['sub_order_id'] ?? null,
+    'payment_method' => $order->get_payment_method_title(),
+    'expiry_date' => $link_data['expires_at'] ?? null
+);
+
+foreach ($order->get_items() as $item) {
+    if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+        $payment_status = $item->get_meta('_wcfp_payment_status');
+        if (!empty($payment_status)) {
+            foreach ($payment_status as $status) {
+                $amount = $status['amount'] * $item->get_quantity();
+                $payment_data['total_amount'] += $amount;
+                if ($status['status'] === 'completed') {
+                    $payment_data['paid_amount'] += $amount;
+                } else {
+                    $payment_data['pending_amount'] += $amount;
+                }
+            }
+            if (!empty($payment_status[$installment_number - 1])) {
+                $payment_data['current_installment'] = array_merge(
+                    $payment_status[$installment_number - 1],
+                    array('number' => $installment_number)
+                );
+            }
+        }
+        break;
+    }
+}
 ?>
 
-<div style="margin-bottom: 40px;">
-    <p style="margin-bottom: 20px;"><?php printf(esc_html__('Hi %s,', 'wc-flex-pay'), esc_html($order->get_billing_first_name())); ?></p>
-
-    <p style="margin-bottom: 30px; font-size: 16px;">
-        <?php esc_html_e('Great news! Your scheduled payment for your order has been successfully processed.', 'wc-flex-pay'); ?>
-    </p>
-
-    <div style="background: #f8f8f8; border: 1px solid #ddd; padding: 20px; margin-bottom: 30px;">
-        <h2 style="color: #2ea2cc; margin: 0 0 20px; font-size: 18px;">
-            <?php
-            printf(
-                esc_html__('Payment Details (Order #%s)', 'wc-flex-pay'),
-                esc_html($order->get_order_number())
-            );
-            ?>
-        </h2>
-
-        <table cellspacing="0" cellpadding="6" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-            <tr>
-                <th scope="row" style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">
-                    <?php esc_html_e('Payment Amount:', 'wc-flex-pay'); ?>
-                </th>
-                <td style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">
-                    <?php echo wp_kses_post(wc_price($payment['amount'])); ?>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row" style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">
-                    <?php esc_html_e('Payment Date:', 'wc-flex-pay'); ?>
-                </th>
-                <td style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">
-                    <?php echo esc_html(date_i18n(get_option('date_format'), current_time('timestamp'))); ?>
-                </td>
-            </tr>
-            <tr>
-                <th scope="row" style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">
-                    <?php esc_html_e('Payment Method:', 'wc-flex-pay'); ?>
-                </th>
-                <td style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">
-                    <?php echo wp_kses_post($order->get_payment_method_title()); ?>
-                </td>
-            </tr>
-            <?php if (!empty($payment['transaction_id'])) : ?>
-                <tr>
-                    <th scope="row" style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">
-                        <?php esc_html_e('Transaction ID:', 'wc-flex-pay'); ?>
-                    </th>
-                    <td style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">
-                        <?php echo esc_html($payment['transaction_id']); ?>
-                    </td>
-                </tr>
-            <?php endif; ?>
-        </table>
-    </div>
-
-    <?php if (!empty($remaining_payments)) : ?>
-        <div style="background: #fff8e5; border: 1px solid #ffba00; padding: 20px; margin-bottom: 30px;">
-            <h3 style="color: #ffba00; margin: 0 0 15px; font-size: 16px;">
-                <?php esc_html_e('Upcoming Payments', 'wc-flex-pay'); ?>
-            </h3>
-
-            <p style="margin: 0 0 15px;">
-                <?php
-                printf(
-                    esc_html__('You have %1$s in remaining payments (%2$d installment(s)).', 'wc-flex-pay'),
-                    wc_price($total_remaining),
-                    count($remaining_payments)
-                );
-                ?>
-            </p>
-
-            <?php if ($next_payment) : ?>
-                <p style="margin: 0; color: #666;">
-                    <?php
-                    printf(
-                        esc_html__('Your next payment of %1$s is scheduled for %2$s.', 'wc-flex-pay'),
-                        wc_price($next_payment['amount']),
-                        date_i18n(get_option('date_format'), strtotime($next_payment['due_date']))
-                    );
-                    ?>
-                </p>
-            <?php endif; ?>
-        </div>
-
-        <div style="margin-bottom: 30px;">
-            <p style="margin: 0 0 15px;">
-                <?php
-                printf(
-                    esc_html__('You can view your complete payment schedule and manage your payments in your account dashboard: %s', 'wc-flex-pay'),
-                    '<a href="' . esc_url($order->get_view_order_url()) . '" style="color: #2ea2cc; text-decoration: none;">' . 
-                    esc_html__('View Order', 'wc-flex-pay') . 
-                    '</a>'
-                );
-                ?>
-            </p>
-
-            <p style="margin: 0; color: #666; font-size: 0.9em;">
-                <?php esc_html_e('Please ensure your payment method is up to date to avoid any interruption in service.', 'wc-flex-pay'); ?>
-            </p>
-        </div>
-    <?php else : ?>
-        <div style="background: #f0f8ff; border: 1px solid #2ea2cc; padding: 20px; margin-bottom: 30px;">
-            <p style="margin: 0; color: #2ea2cc; font-size: 16px;">
-                <?php esc_html_e('This was your final payment. Thank you for completing all payments for this order!', 'wc-flex-pay'); ?>
-            </p>
-        </div>
-    <?php endif; ?>
-
-    <p style="margin: 0; text-align: center; color: #666;">
-        <?php esc_html_e('Thank you for your business!', 'wc-flex-pay'); ?>
-    </p>
+<div class="wcfp-success-notice" style="margin-bottom: 20px; padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; color: #155724;">
+    <?php
+    printf(
+        /* translators: %1$s: customer first name, %2$s: order number */
+        esc_html__('Hi %1$s, your payment for order #%2$s has been received.', 'wc-flex-pay'),
+        esc_html($order->get_billing_first_name()),
+        esc_html($order->get_order_number())
+    );
+    ?>
 </div>
 
 <?php
+// Include payment summary
+include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php';
+
+// Include order details
+include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php';
+
+// Add next payment notice if there are pending payments
+if ($payment_data['pending_amount'] > 0) : ?>
+    <div class="wcfp-next-payment-notice" style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; color: #856404;">
+        <?php
+        esc_html_e('You still have pending payments for this order. You\'ll receive a reminder email before the next payment is due.', 'wc-flex-pay');
+        ?>
+    </div>
+<?php endif; ?>
+
+<?php
 /**
+ * Show user-defined additional content - this is set in each email's settings.
+ */
+if ($additional_content) {
+    echo wp_kses_post(wpautop(wptexturize($additional_content)));
+}
+
+/*
  * @hooked WC_Emails::email_footer() Output the email footer
  */
 do_action('woocommerce_email_footer', $email);
