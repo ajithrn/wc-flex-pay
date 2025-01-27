@@ -63,6 +63,7 @@ foreach ($links as $installment_number => $link) {
                     <th><?php esc_html_e('Amount', 'wc-flex-pay'); ?></th>
                     <th><?php esc_html_e('Payment Date', 'wc-flex-pay'); ?></th>
                     <th><?php esc_html_e('Transaction ID', 'wc-flex-pay'); ?></th>
+                    <th><?php esc_html_e('Order ID', 'wc-flex-pay'); ?></th>
                 </tr>
             </thead>
             <tbody>
@@ -73,6 +74,19 @@ foreach ($links as $installment_number => $link) {
                         <td><?php echo wc_price($payment['amount']); ?></td>
                         <td><?php echo esc_html(date_i18n(get_option('date_format'), strtotime($payment['payment_date']))); ?></td>
                         <td><?php echo esc_html($payment['transaction_id'] ?? '-'); ?></td>
+                        <td>
+                            <?php 
+                            if (!empty($payment['sub_order_id'])) {
+                                printf(
+                                    '<a href="%s">#%s</a>',
+                                    esc_url(get_edit_post_link($payment['sub_order_id'])),
+                                    esc_html($payment['sub_order_id'])
+                                );
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -96,6 +110,7 @@ foreach ($links as $installment_number => $link) {
                     <th><?php esc_html_e('Installment', 'wc-flex-pay'); ?></th>
                     <th><?php esc_html_e('Product', 'wc-flex-pay'); ?></th>
                     <th><?php esc_html_e('Amount', 'wc-flex-pay'); ?></th>
+                    <th><?php esc_html_e('Order ID', 'wc-flex-pay'); ?></th>
                     <?php if ($is_admin) : ?>
                         <th><?php esc_html_e('Payment Link', 'wc-flex-pay'); ?></th>
                         <th><?php esc_html_e('Actions', 'wc-flex-pay'); ?></th>
@@ -137,6 +152,21 @@ foreach ($links as $installment_number => $link) {
                         <td><?php printf(__('Installment %d', 'wc-flex-pay'), $installment['number']); ?></td>
                         <td><?php echo esc_html($installment['product_name']); ?></td>
                         <td><?php echo wc_price($installment['amount']); ?></td>
+                        <td>
+                            <?php 
+                            // Show sub-order ID if link is generated (link has sub_order_id) or payment is complete
+                            if (($link_active && !empty($link['sub_order_id'])) || $installment['status'] === 'completed') {
+                                $sub_order_id = $link['sub_order_id'] ?? $installment['sub_order_id'];
+                                printf(
+                                    '<a href="%s">#%s</a>',
+                                    esc_url(get_edit_post_link($sub_order_id)),
+                                    esc_html($sub_order_id)
+                                );
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </td>
                         <?php if ($is_admin) : ?>
                             <td>
                                 <?php if ($link_active) : ?>

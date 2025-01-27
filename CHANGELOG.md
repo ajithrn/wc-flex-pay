@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.1] - 2025-01-28
+### Changed
+- Removed duplicate payment schedule display after billing address in admin order screen
+- Enhanced payment schedule display with Order ID column for both completed and upcoming payments
+- Added proper linking of sub-order IDs in payment schedule tables
+- Improved payment reminder email templates with better formatting and structure
+- Added comprehensive order details email functionality
+- Enhanced email template organization and reusability
+
 ## [1.6.0] - 2025-01-27
 ### Added
 - Payment date management system with admin controls

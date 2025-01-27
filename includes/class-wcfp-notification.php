@@ -31,6 +31,10 @@ class Notification {
         // Email Classes
         add_filter('woocommerce_email_classes', array($this, 'register_emails'));
         
+        // Email Triggers
+        add_action('woocommerce_checkout_order_processed', array($this, 'send_initial_order_emails'), 10, 3);
+        add_action('woocommerce_payment_complete', array($this, 'send_payment_complete_email'), 10);
+        
         // Payment Status Notifications
         add_action('woocommerce_order_status_completed', array($this, 'send_payment_completed_notification'));
         add_action('woocommerce_order_status_failed', array($this, 'send_payment_failed_notification'));
@@ -49,11 +53,15 @@ class Notification {
         add_action('woocommerce_order_action_wcfp_send_payment_reminder', array($this, 'process_order_action_payment_reminder'));
         add_action('woocommerce_order_action_wcfp_send_payment_complete', array($this, 'process_order_action_payment_complete'));
         add_action('woocommerce_order_action_wcfp_send_payment_overdue', array($this, 'process_order_action_payment_overdue'));
+        add_action('woocommerce_order_action_wcfp_send_order_details', array($this, 'process_order_action_order_details'));
 
         // Bulk Actions
         add_filter('bulk_actions-edit-shop_order', array($this, 'add_bulk_actions'));
         add_filter('handle_bulk_actions-edit-shop_order', array($this, 'handle_bulk_actions'), 10, 3);
         add_action('admin_notices', array($this, 'bulk_action_admin_notice'));
+
+        // Template Override
+        add_filter('woocommerce_locate_template', array($this, 'override_wc_templates'), 10, 3);
     }
 
     /**
@@ -72,22 +80,33 @@ class Notification {
      * @return array
      */
     public function register_emails($email_classes) {
-        // Include base email class first
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-base.php';
+        if (!class_exists('\WCFP\Emails\Email_Base')) {
+            require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-base.php';
+        }
 
-        // Include specific email classes
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-complete.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-failed.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-reminder.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-overdue.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/emails/class-wcfp-email-payment-link.php';
+        // Map of email classes to their IDs
+        $email_map = array(
+            'Payment_Complete' => 'wcfp_payment_complete',
+            'Payment_Failed' => 'wcfp_payment_failed',
+            'Payment_Reminder' => 'wcfp_payment_reminder',
+            'Payment_Overdue' => 'wcfp_payment_overdue',
+            'Payment_Link' => 'wcfp_payment_link',
+            'Order_Details' => 'wcfp_order_details'
+        );
 
-        // Add email classes with proper initialization
-        $email_classes['wcfp_payment_complete'] = new Emails\Payment_Complete();
-        $email_classes['wcfp_payment_failed'] = new Emails\Payment_Failed();
-        $email_classes['wcfp_payment_reminder'] = new Emails\Payment_Reminder();
-        $email_classes['wcfp_payment_overdue'] = new Emails\Payment_Overdue();
-        $email_classes['wcfp_payment_link'] = new Emails\Payment_Link();
+        // Load and register each email class
+        foreach ($email_map as $class => $id) {
+            $class_file = strtolower(str_replace('_', '-', $class));
+            $file = WCFP_PLUGIN_DIR . "includes/emails/class-wcfp-email-{$class_file}.php";
+            
+            if (file_exists($file)) {
+                require_once $file;
+                $class_name = "\\WCFP\\Emails\\{$class}";
+                if (class_exists($class_name)) {
+                    $email_classes[$id] = new $class_name();
+                }
+            }
+        }
 
         return $email_classes;
     }
@@ -103,29 +122,12 @@ class Notification {
         }
 
         $order = wc_get_order($order_id);
-        if (!$order) {
-            return;
-        }
-
-        // Check if this is a Flex Pay order
-        $has_flex_pay = false;
-        foreach ($order->get_items() as $item) {
-            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
-                $has_flex_pay = true;
-                break;
-            }
-        }
-
-        if (!$has_flex_pay) {
+        if (!$order || !$this->is_flex_pay_order($order)) {
             return;
         }
 
         try {
-            $mailer = WC()->mailer();
-            $emails = $mailer->get_emails();
-            if (isset($emails['wcfp_payment_complete'])) {
-                $emails['wcfp_payment_complete']->trigger($order_id, 1, array()); // Default to first installment if not specified
-            }
+            Emails::instance()->send_payment_complete($order_id, 1);
             $this->log_notification('completed_sent', $order_id);
         } catch (\Exception $e) {
             $this->log_error($e->getMessage(), array('order_id' => $order_id));
@@ -143,29 +145,12 @@ class Notification {
         }
 
         $order = wc_get_order($order_id);
-        if (!$order) {
-            return;
-        }
-
-        // Check if this is a Flex Pay order
-        $has_flex_pay = false;
-        foreach ($order->get_items() as $item) {
-            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
-                $has_flex_pay = true;
-                break;
-            }
-        }
-
-        if (!$has_flex_pay) {
+        if (!$order || !$this->is_flex_pay_order($order)) {
             return;
         }
 
         try {
-            $mailer = WC()->mailer();
-            $emails = $mailer->get_emails();
-            if (isset($emails['wcfp_payment_failed'])) {
-                $emails['wcfp_payment_failed']->trigger($order_id, 1, array()); // Default to first installment if not specified
-            }
+            Emails::instance()->send_payment_failed($order_id, 1);
             $this->log_notification('failed_sent', $order_id);
         } catch (\Exception $e) {
             $this->log_error($e->getMessage(), array('order_id' => $order_id));
@@ -183,30 +168,26 @@ class Notification {
         }
 
         $order = wc_get_order($order_id);
-        if (!$order) {
+        if (!$order || !$this->is_flex_pay_order($order)) {
             return;
         }
 
-        // Check if this is a Flex Pay order and find overdue payments
-        $has_flex_pay = false;
+        // Find overdue payments
         $overdue_payments = array();
         foreach ($order->get_items() as $item) {
-            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
-                $has_flex_pay = true;
-                $payment_status = $item->get_meta('_wcfp_payment_status');
-                if (!empty($payment_status)) {
-                    foreach ($payment_status as $payment_id => $payment) {
-                        if ($payment['status'] === 'pending' && 
-                            strtotime($payment['due_date']) < current_time('timestamp')) {
-                            $overdue_payments[$payment_id] = $payment;
-                        }
+            $payment_status = $item->get_meta('_wcfp_payment_status');
+            if (!empty($payment_status)) {
+                foreach ($payment_status as $payment_id => $payment) {
+                    if ($payment['status'] === 'pending' && 
+                        strtotime($payment['due_date']) < current_time('timestamp')) {
+                        $overdue_payments[$payment_id] = $payment;
                     }
                 }
-                break;
             }
+            break;
         }
 
-        if (!$has_flex_pay || empty($overdue_payments)) {
+        if (empty($overdue_payments)) {
             return;
         }
 
@@ -215,11 +196,7 @@ class Notification {
                 // Generate payment link with extended expiry
                 $link_data = $this->generate_payment_link($order, $payment_id, $payment, true);
                 
-                $mailer = WC()->mailer();
-                $emails = $mailer->get_emails();
-                if (isset($emails['wcfp_payment_overdue'])) {
-                    $emails['wcfp_payment_overdue']->trigger($order->get_id(), $payment_id, $link_data);
-                }
+                Emails::instance()->send_payment_overdue($order->get_id(), $payment_id, $link_data);
 
                 // Add order note
                 $order->add_order_note(
@@ -271,7 +248,7 @@ class Notification {
         }
 
         foreach ($orders as $order) {
-            if (!$order) continue;
+            if (!$order || !$this->is_flex_pay_order($order)) continue;
             $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
             if (empty($payments)) continue;
 
@@ -283,11 +260,7 @@ class Notification {
                         // Generate payment link
                         $link_data = $this->generate_payment_link($order, $payment_id, $payment);
                         
-                        $mailer = WC()->mailer();
-                        $emails = $mailer->get_emails();
-                        if (isset($emails['wcfp_payment_reminder'])) {
-                            $emails['wcfp_payment_reminder']->trigger($order->get_id(), $payment_id, $link_data);
-                        }
+                        Emails::instance()->send_payment_reminder($order->get_id(), $payment_id, $link_data);
 
                         // Add order note
                         $order->add_order_note(
@@ -380,12 +353,44 @@ class Notification {
     public function process_order_action_payment_reminder($order) {
         if ($this->is_flex_pay_order($order)) {
             try {
-                $this->send_payment_reminder($order->get_id());
-                $order->add_order_note(
-                    __('Payment reminder email sent manually.', 'wc-flex-pay'),
-                    false,
-                    true
-                );
+                // Find next upcoming payment
+                foreach ($order->get_items() as $item) {
+                    $payment_status = $item->get_meta('_wcfp_payment_status');
+                    if (!empty($payment_status)) {
+                        foreach ($payment_status as $payment_id => $payment) {
+                            if ($payment['status'] === 'pending' && 
+                                strtotime($payment['due_date']) > current_time('timestamp')) {
+                                // Generate payment link
+                                $payment_handler = new Payment();
+                                $link_data = $payment_handler->generate_payment_link(
+                                    $order->get_id(), 
+                                    $payment_id + 1
+                                );
+                                
+                                // Send reminder with link
+                                Emails::instance()->send_payment_reminder(
+                                    $order->get_id(), 
+                                    $payment_id + 1, 
+                                    $link_data
+                                );
+
+                                $order->add_order_note(
+                                    sprintf(
+                                        __('Payment reminder sent for installment #%d with payment link (expires: %s).', 'wc-flex-pay'),
+                                        $payment_id + 1,
+                                        date_i18n(
+                                            get_option('date_format') . ' ' . get_option('time_format'),
+                                            strtotime($link_data['expires_at'])
+                                        )
+                                    ),
+                                    false,
+                                    true
+                                );
+                                break 2;
+                            }
+                        }
+                    }
+                }
             } catch (\Exception $e) {
                 $this->log_error($e->getMessage(), array('order_id' => $order->get_id()));
             }
@@ -400,7 +405,7 @@ class Notification {
     public function process_order_action_payment_complete($order) {
         if ($this->is_flex_pay_order($order)) {
             try {
-                $this->send_payment_completed_notification($order->get_id());
+                Emails::instance()->send_payment_complete($order->get_id(), 1);
                 $order->add_order_note(
                     __('Payment complete email sent manually.', 'wc-flex-pay'),
                     false,
@@ -420,9 +425,29 @@ class Notification {
     public function process_order_action_payment_overdue($order) {
         if ($this->is_flex_pay_order($order)) {
             try {
-                $this->send_payment_overdue_notification($order->get_id());
+                Emails::instance()->send_payment_overdue($order->get_id(), 1);
                 $order->add_order_note(
                     __('Payment overdue notice sent manually.', 'wc-flex-pay'),
+                    false,
+                    true
+                );
+            } catch (\Exception $e) {
+                $this->log_error($e->getMessage(), array('order_id' => $order->get_id()));
+            }
+        }
+    }
+
+    /**
+     * Process order action - order details
+     *
+     * @param WC_Order $order
+     */
+    public function process_order_action_order_details($order) {
+        if ($this->is_flex_pay_order($order)) {
+            try {
+                Emails::instance()->send_order_details($order->get_id(), 1);
+                $order->add_order_note(
+                    __('Order details email sent manually.', 'wc-flex-pay'),
                     false,
                     true
                 );
@@ -456,6 +481,7 @@ class Notification {
             $actions['wcfp_send_payment_reminder'] = __('Send Payment Reminder', 'wc-flex-pay');
             $actions['wcfp_send_payment_complete'] = __('Send Payment Complete', 'wc-flex-pay');
             $actions['wcfp_send_payment_overdue'] = __('Send Payment Overdue Notice', 'wc-flex-pay');
+            $actions['wcfp_send_order_details'] = __('Send Order Details', 'wc-flex-pay');
         }
 
         return $actions;
@@ -471,6 +497,7 @@ class Notification {
         $actions['wcfp_bulk_send_payment_reminder'] = __('Send Payment Reminder', 'wc-flex-pay');
         $actions['wcfp_bulk_send_payment_complete'] = __('Send Payment Complete', 'wc-flex-pay');
         $actions['wcfp_bulk_send_payment_overdue'] = __('Send Payment Overdue Notice', 'wc-flex-pay');
+        $actions['wcfp_bulk_send_order_details'] = __('Send Order Details', 'wc-flex-pay');
         return $actions;
     }
 
@@ -491,8 +518,45 @@ class Notification {
                     $order = wc_get_order($post_id);
                     if ($this->is_flex_pay_order($order)) {
                         try {
-                            $this->send_payment_reminder($post_id);
-                            $processed_orders++;
+                            // Find next upcoming payment
+                            foreach ($order->get_items() as $item) {
+                                $payment_status = $item->get_meta('_wcfp_payment_status');
+                                if (!empty($payment_status)) {
+                                    foreach ($payment_status as $payment_id => $payment) {
+                                        if ($payment['status'] === 'pending' && 
+                                            strtotime($payment['due_date']) > current_time('timestamp')) {
+                                            // Generate payment link
+                                            $payment_handler = new Payment();
+                                            $link_data = $payment_handler->generate_payment_link(
+                                                $order->get_id(), 
+                                                $payment_id + 1
+                                            );
+                                            
+                                            // Send reminder with link
+                                            Emails::instance()->send_payment_reminder(
+                                                $order->get_id(), 
+                                                $payment_id + 1, 
+                                                $link_data
+                                            );
+
+                                            $order->add_order_note(
+                                                sprintf(
+                                                    __('Payment reminder sent for installment #%d with payment link (expires: %s).', 'wc-flex-pay'),
+                                                    $payment_id + 1,
+                                                    date_i18n(
+                                                        get_option('date_format') . ' ' . get_option('time_format'),
+                                                        strtotime($link_data['expires_at'])
+                                                    )
+                                                ),
+                                                false,
+                                                true
+                                            );
+                                            $processed_orders++;
+                                            break 2;
+                                        }
+                                    }
+                                }
+                            }
                         } catch (\Exception $e) {
                             $this->log_error($e->getMessage(), array('order_id' => $post_id));
                         }
@@ -509,7 +573,7 @@ class Notification {
                     $order = wc_get_order($post_id);
                     if ($this->is_flex_pay_order($order)) {
                         try {
-                            $this->send_payment_completed_notification($post_id);
+                            Emails::instance()->send_payment_complete($post_id, 1);
                             $processed_orders++;
                         } catch (\Exception $e) {
                             $this->log_error($e->getMessage(), array('order_id' => $post_id));
@@ -527,7 +591,7 @@ class Notification {
                     $order = wc_get_order($post_id);
                     if ($this->is_flex_pay_order($order)) {
                         try {
-                            $this->send_payment_overdue_notification($post_id);
+                            Emails::instance()->send_payment_overdue($post_id, 1);
                             $processed_orders++;
                         } catch (\Exception $e) {
                             $this->log_error($e->getMessage(), array('order_id' => $post_id));
@@ -537,6 +601,24 @@ class Notification {
                 $redirect_to = add_query_arg(array(
                     'wcfp_bulk_sent' => $processed_orders,
                     'wcfp_bulk_action' => 'payment_overdue',
+                ), $redirect_to);
+                break;
+
+            case 'wcfp_bulk_send_order_details':
+                foreach ($post_ids as $post_id) {
+                    $order = wc_get_order($post_id);
+                    if ($this->is_flex_pay_order($order)) {
+                        try {
+                            Emails::instance()->send_order_details($post_id, 1);
+                            $processed_orders++;
+                        } catch (\Exception $e) {
+                            $this->log_error($e->getMessage(), array('order_id' => $post_id));
+                        }
+                    }
+                }
+                $redirect_to = add_query_arg(array(
+                    'wcfp_bulk_sent' => $processed_orders,
+                    'wcfp_bulk_action' => 'order_details',
                 ), $redirect_to);
                 break;
         }
@@ -592,6 +674,18 @@ class Notification {
                     $count
                 );
                 break;
+
+            case 'order_details':
+                $message = sprintf(
+                    _n(
+                        'Order details email sent to %d order.',
+                        'Order details emails sent to %d orders.',
+                        $count,
+                        'wc-flex-pay'
+                    ),
+                    $count
+                );
+                break;
         }
 
         if ($message) {
@@ -627,6 +721,99 @@ class Notification {
      */
     private function is_notification_enabled($type) {
         return 'yes' === get_option('wcfp_enable_' . $type . '_notifications', 'yes');
+    }
+
+    /**
+     * Override WooCommerce templates for Flex Pay orders
+     */
+    public function override_wc_templates($template, $template_name, $template_path) {
+        $override_templates = array(
+            'emails/order-details.php',
+            'emails/customer-completed-order.php',
+            'order/order-details.php'
+        );
+
+        if (in_array($template_name, $override_templates)) {
+            $order = $this->get_current_order_from_template();
+            if ($order && $this->is_flex_pay_order($order)) {
+                $override = WCFP_PLUGIN_DIR . 'templates/' . $template_name;
+                if (file_exists($override)) {
+                    return $override;
+                }
+            }
+        }
+        
+        return $template;
+    }
+
+    /**
+     * Get current order from template context
+     */
+    private function get_current_order_from_template() {
+        global $post, $order;
+        
+        if (is_admin() && $post && $post->post_type === 'shop_order') {
+            return wc_get_order($post->ID);
+        }
+
+        if (did_action('woocommerce_email_header')) {
+            // We're in an email template
+            return $order;
+        }
+
+        return false;
+    }
+
+    /**
+     * Send initial order emails
+     */
+    public function send_initial_order_emails($order_id, $posted_data, $order) {
+        if ($this->is_flex_pay_order($order)) {
+            try {
+                // Get total number of installments
+                $total_installments = 0;
+                foreach ($order->get_items() as $item) {
+                    $payment_status = $item->get_meta('_wcfp_payment_status');
+                    if (!empty($payment_status)) {
+                        $total_installments = count($payment_status);
+                        break;
+                    }
+                }
+
+                // Send a single email with complete payment schedule
+                if ($total_installments > 0) {
+                    Emails::instance()->send_order_details($order_id, $total_installments);
+                    $this->log_notification('initial_order_sent', $order_id);
+                }
+            } catch (\Exception $e) {
+                $this->log_error($e->getMessage(), array('order_id' => $order_id));
+            }
+        }
+    }
+
+    /**
+     * Send payment complete email
+     */
+    public function send_payment_complete_email($order_id) {
+        $order = wc_get_order($order_id);
+        if ($this->is_flex_pay_order($order)) {
+            try {
+                $installment_number = $order->get_meta('_wcfp_installment_number');
+                $parent_order_id = $order->get_meta('_wcfp_parent_order');
+                
+                if ($parent_order_id && $installment_number) {
+                    Emails::instance()->send_payment_complete($parent_order_id, $installment_number, array(
+                        'transaction_id' => $order->get_transaction_id(),
+                        'payment_method' => $order->get_payment_method_title(),
+                        'payment_date' => current_time('mysql'),
+                        'sub_order_id' => $order_id
+                    ));
+                    $this->log_notification('payment_complete_sent', $order_id);
+                }
+            } catch (\Exception $e) {
+                $this->log_error($e->getMessage(), array('order_id' => $order_id));
+            }
+        }
     }
 
     /**

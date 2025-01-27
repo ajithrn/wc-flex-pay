@@ -261,16 +261,6 @@ class Admin {
             'normal',
             'high'
         );
-
-        // Sub-order meta box
-        add_meta_box(
-            'wcfp-sub-order-info',
-            __('Flex Pay Sub-order Information', 'wc-flex-pay'),
-            array($this, 'render_sub_order_meta_box'),
-            'shop_order',
-            'side',
-            'high'
-        );
     }
 
     /**
@@ -459,23 +449,6 @@ class Admin {
         }
 
         include WCFP_PLUGIN_DIR . 'templates/admin/order-meta-box.php';
-    }
-
-    /**
-     * Render sub-order meta box
-     */
-    public function render_sub_order_meta_box($post) {
-        $order = wc_get_order($post->ID);
-        if (!$order) {
-            return;
-        }
-
-        // Only show for sub-orders
-        if (!$order->get_meta('_wcfp_parent_order')) {
-            return;
-        }
-
-        include WCFP_PLUGIN_DIR . 'templates/admin/sub-order-meta-box.php';
     }
 
     /**

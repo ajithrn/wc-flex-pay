@@ -351,6 +351,55 @@ class Payment {
         $sub_order->calculate_totals();
         $sub_order->save();
 
+        // Add detailed order notes
+        $sub_order->add_order_note(sprintf(
+            /* translators: 1: parent order ID, 2: parent order link */
+            __('Sub-order created for parent order %1$s (%2$s)', 'wc-flex-pay'),
+            $parent_order->get_order_number(),
+            sprintf(
+                '<a href="%s">#%s</a>',
+                get_edit_post_link($parent_order->get_id()),
+                $parent_order->get_order_number()
+            )
+        ));
+
+        $sub_order->add_order_note(sprintf(
+            /* translators: 1: installment number, 2: formatted amount, 3: formatted date */
+            __('Installment #%1$d: Amount: %2$s, Due Date: %3$s', 'wc-flex-pay'),
+            $installment['number'],
+            wc_price($installment['amount']),
+            date_i18n(get_option('date_format'), strtotime($installment['due_date']))
+        ));
+
+        // Get total and pending amounts
+        $total_amount = 0;
+        $pending_amount = 0;
+        foreach ($parent_order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (!empty($payment_status)) {
+                    foreach ($payment_status as $status) {
+                        $amount = $status['amount'] * $item->get_quantity();
+                        $total_amount += $amount;
+                        if ($status['status'] !== 'completed') {
+                            $pending_amount += $amount;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
+        $sub_order->add_order_note(sprintf(
+            /* translators: 1: formatted total amount, 2: formatted pending amount */
+            __('Total Order Amount: %1$s, Remaining Balance: %2$s', 'wc-flex-pay'),
+            wc_price($total_amount),
+            wc_price($pending_amount)
+        ));
+
+        // Send order details email
+        do_action('wcfp_send_order_details_notification', $parent_order->get_id(), $installment['number']);
+
         return $sub_order;
     }
 

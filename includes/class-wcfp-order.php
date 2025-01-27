@@ -79,7 +79,6 @@ class Order {
         
         // Order Display
         add_action('woocommerce_order_details_after_order_table', array($this, 'display_payment_schedule'));
-        add_action('woocommerce_admin_order_data_after_billing_address', array($this, 'display_admin_payment_schedule'));
         
         // Custom Order Status
         add_action('init', array($this, 'register_custom_order_statuses'));
@@ -291,6 +290,13 @@ class Order {
                         } else {
                             $installment_data['payment_date'] = $status['payment_date'];
                             $installment_data['transaction_id'] = $status['transaction_id'];
+                            
+                            // Get sub order ID from payments meta if available
+                            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true) ?: array();
+                            if (!empty($payments['installments'][$status['number'] - 1]['sub_order_id'])) {
+                                $installment_data['sub_order_id'] = $payments['installments'][$status['number'] - 1]['sub_order_id'];
+                            }
+                            
                             $completed_payments[] = $installment_data;
                         }
                     }
@@ -339,14 +345,6 @@ class Order {
      */
     public function display_payment_schedule($order) {
         $is_admin = false;
-        include WCFP_PLUGIN_DIR . 'templates/order/payment-schedule.php';
-    }
-
-    /**
-     * Display admin payment schedule
-     */
-    public function display_admin_payment_schedule($order) {
-        $is_admin = true;
         include WCFP_PLUGIN_DIR . 'templates/order/payment-schedule.php';
     }
 

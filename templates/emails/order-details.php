@@ -1,6 +1,6 @@
 <?php
 /**
- * Payment Reminder Email Template (HTML)
+ * Order Details Email Template (HTML)
  *
  * @package WC_Flex_Pay\Templates\Emails
  */
@@ -28,13 +28,17 @@ $payment_data = array_merge(array(
     'paid_amount' => 0,
     'pending_amount' => 0,
     'current_installment' => null,
-    'sub_order_id' => $link_data['sub_order_id'] ?? null,
+    'sub_order_id' => null,
     'payment_method' => $order->get_payment_method_title(),
-    'expiry_date' => $link_data['expires_at'] ?? null
+    'expires_at' => null,
 ), $payment_data);
 
-// Get payment status for upcoming installments only
-$upcoming_payments = array();
+// Get payment status for all installments
+$installments = array(
+    'upcoming' => array(),
+    'completed' => array()
+);
+
 foreach ($order->get_items() as $item) {
     if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
         $payment_status = $item->get_meta('_wcfp_payment_status');
@@ -45,31 +49,25 @@ foreach ($order->get_items() as $item) {
                 
                 if ($payment['status'] === 'completed') {
                     $payment_data['paid_amount'] += $amount;
+                    $installments['completed'][] = array_merge($payment, array('number' => $payment_id + 1));
                 } else {
                     $payment_data['pending_amount'] += $amount;
-                    if (strtotime($payment['due_date']) > current_time('timestamp')) {
-                        $upcoming_payments[] = array_merge($payment, array(
-                            'number' => $payment_id + 1
-                        ));
-                    }
+                    $installments['upcoming'][] = array_merge($payment, array('number' => $payment_id + 1));
                 }
-            }
-            
-            // Set current installment
-            if (!empty($payment_status[$installment_number - 1])) {
-                $payment_data['current_installment'] = array_merge(
-                    $payment_status[$installment_number - 1],
-                    array('number' => $installment_number)
-                );
             }
         }
         break;
     }
 }
 
-// Sort upcoming payments by due date
-usort($upcoming_payments, function($a, $b) {
+// Sort upcoming installments by due date
+usort($installments['upcoming'], function($a, $b) {
     return strtotime($a['due_date']) - strtotime($b['due_date']);
+});
+
+// Sort completed installments by payment date
+usort($installments['completed'], function($a, $b) {
+    return strtotime($b['payment_date'] ?? '0') - strtotime($a['payment_date'] ?? '0');
 });
 ?>
 
@@ -77,7 +75,7 @@ usort($upcoming_payments, function($a, $b) {
     <?php
     printf(
         /* translators: %1$s: customer first name, %2$s: order number */
-        esc_html__('Hi %1$s, this is a reminder about your upcoming payment for order #%2$s.', 'wc-flex-pay'),
+        esc_html__('Hi %1$s, here are your payment details for order #%2$s.', 'wc-flex-pay'),
         esc_html($order->get_billing_first_name()),
         esc_html($order->get_order_number())
     );
@@ -94,45 +92,7 @@ usort($upcoming_payments, function($a, $b) {
     </div>
 </div>
 
-<?php if (!empty($payment_data['current_installment'])) : ?>
-    <div class="wcfp-divider"></div>
-    <div class="wcfp-section">
-        <h3 class="wcfp-heading"><?php esc_html_e('Current Payment Due', 'wc-flex-pay'); ?></h3>
-        <div class="wcfp-summary-box">
-            <table class="wcfp-summary-table">
-                <tr>
-                    <th><?php esc_html_e('Installment', 'wc-flex-pay'); ?></th>
-                    <td>
-                        <?php 
-                        printf(
-                            /* translators: %d: installment number */
-                            esc_html__('#%d', 'wc-flex-pay'),
-                            $payment_data['current_installment']['number']
-                        ); 
-                        ?>
-                    </td>
-                </tr>
-                <tr>
-                    <th><?php esc_html_e('Amount', 'wc-flex-pay'); ?></th>
-                    <td class="amount"><?php echo wc_price($payment_data['current_installment']['amount']); ?></td>
-                </tr>
-                <tr>
-                    <th><?php esc_html_e('Due Date', 'wc-flex-pay'); ?></th>
-                    <td>
-                        <?php 
-                        echo date_i18n(
-                            get_option('date_format'),
-                            strtotime($payment_data['current_installment']['due_date'])
-                        ); 
-                        ?>
-                    </td>
-                </tr>
-            </table>
-        </div>
-    </div>
-<?php endif; ?>
-
-<?php if (!empty($upcoming_payments)) : ?>
+<?php if (!empty($installments['upcoming'])) : ?>
     <div class="wcfp-divider"></div>
     <div class="wcfp-section">
         <h3 class="wcfp-heading"><?php esc_html_e('Upcoming Payments', 'wc-flex-pay'); ?></h3>
@@ -147,30 +107,76 @@ usort($upcoming_payments, function($a, $b) {
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($upcoming_payments as $payment) : ?>
+                    <?php foreach ($installments['upcoming'] as $installment) : ?>
                         <tr>
                             <td>
                                 <?php 
                                 printf(
                                     /* translators: %d: installment number */
                                     esc_html__('#%d', 'wc-flex-pay'),
-                                    $payment['number']
+                                    $installment['number']
                                 ); 
                                 ?>
                             </td>
-                            <td class="amount"><?php echo wc_price($payment['amount']); ?></td>
+                            <td class="amount"><?php echo wc_price($installment['amount']); ?></td>
                             <td>
                                 <?php 
                                 echo date_i18n(
                                     get_option('date_format'),
-                                    strtotime($payment['due_date'])
+                                    strtotime($installment['due_date'])
                                 ); 
                                 ?>
                             </td>
                             <td>
-                                <span class="wcfp-status <?php echo esc_attr($payment['status']); ?>">
-                                    <?php echo esc_html(ucfirst($payment['status'])); ?>
+                                <span class="wcfp-status <?php echo esc_attr($installment['status']); ?>">
+                                    <?php echo esc_html(ucfirst($installment['status'])); ?>
                                 </span>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($installments['completed'])) : ?>
+    <div class="wcfp-divider"></div>
+    <div class="wcfp-section">
+        <h3 class="wcfp-heading"><?php esc_html_e('Completed Payments', 'wc-flex-pay'); ?></h3>
+        <div class="wcfp-summary-box">
+            <table class="wcfp-summary-table">
+                <thead>
+                    <tr>
+                        <th><?php esc_html_e('Installment', 'wc-flex-pay'); ?></th>
+                        <th><?php esc_html_e('Amount', 'wc-flex-pay'); ?></th>
+                        <th><?php esc_html_e('Payment Date', 'wc-flex-pay'); ?></th>
+                        <th><?php esc_html_e('Transaction ID', 'wc-flex-pay'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($installments['completed'] as $installment) : ?>
+                        <tr>
+                            <td>
+                                <?php 
+                                printf(
+                                    /* translators: %d: installment number */
+                                    esc_html__('#%d', 'wc-flex-pay'),
+                                    $installment['number']
+                                ); 
+                                ?>
+                            </td>
+                            <td class="amount"><?php echo wc_price($installment['amount']); ?></td>
+                            <td>
+                                <?php 
+                                echo date_i18n(
+                                    get_option('date_format'),
+                                    strtotime($installment['payment_date'])
+                                ); 
+                                ?>
+                            </td>
+                            <td>
+                                <?php echo esc_html($installment['transaction_id'] ?? '-'); ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -193,43 +199,18 @@ usort($upcoming_payments, function($a, $b) {
 </div>
 
 <?php
-// Prepare action buttons if URL is available
-if (!empty($link_data['url'])) {
-    $actions = array(
-        'pay' => array(
-            'url' => $link_data['url'],
-            'text' => __('Pay Now', 'wc-flex-pay')
-        )
-    );
-    $primary_action = 'pay';
-
-    // Include action buttons
-    include WCFP_PLUGIN_DIR . 'templates/emails/partials/action-buttons.php';
-}
-
-// Show payment notice
-if (!empty($payment_data['current_installment'])) : ?>
+// Show next payment notice if there are pending payments
+if ($payment_data['pending_amount'] > 0 && !empty($installments['upcoming'])) : ?>
     <div class="wcfp-divider"></div>
     <div class="wcfp-installment-details">
         <?php
+        $next_payment = reset($installments['upcoming']);
         printf(
             /* translators: 1: formatted amount, 2: formatted date */
-            esc_html__('Your payment of %1$s is due on %2$s. Please ensure to make the payment before the due date to avoid any late fees.', 'wc-flex-pay'),
-            wc_price($payment_data['current_installment']['amount']),
-            date_i18n(get_option('date_format'), strtotime($payment_data['current_installment']['due_date']))
+            esc_html__('Your next payment of %1$s is due on %2$s. You\'ll receive a payment reminder email before the due date.', 'wc-flex-pay'),
+            wc_price($next_payment['amount']),
+            date_i18n(get_option('date_format'), strtotime($next_payment['due_date']))
         );
-
-        if (!empty($link_data['expires_at'])) {
-            echo '<br><br>';
-            printf(
-                /* translators: %s: formatted date */
-                esc_html__('This payment link will expire on %s.', 'wc-flex-pay'),
-                date_i18n(
-                    get_option('date_format') . ' ' . get_option('time_format'),
-                    strtotime($link_data['expires_at'])
-                )
-            );
-        }
         ?>
     </div>
 <?php endif; ?>
@@ -238,7 +219,7 @@ if (!empty($payment_data['current_installment'])) : ?>
 /**
  * Show user-defined additional content - this is set in each email's settings.
  */
-if ($additional_content) {
+if (isset($additional_content) && !empty($additional_content)) {
     echo wp_kses_post(wpautop(wptexturize($additional_content)));
 }
 
