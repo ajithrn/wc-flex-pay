@@ -238,7 +238,11 @@ class Notification {
         $current_date = current_time('mysql');
 
         if ($order_id) {
-            $orders = array(wc_get_order($order_id));
+            $order = wc_get_order($order_id);
+            if (!$order || !$this->is_flex_pay_order($order)) {
+                return;
+            }
+            $orders = array($order);
         } else {
             // Get all orders with flex pay payments
             $orders = wc_get_orders(array(
@@ -248,45 +252,62 @@ class Notification {
         }
 
         foreach ($orders as $order) {
-            if (!$order || !$this->is_flex_pay_order($order)) continue;
+            if (!$order instanceof \WC_Order || !$this->is_flex_pay_order($order)) continue;
             $payments = get_post_meta($order->get_id(), '_wcfp_payments', true);
             if (empty($payments)) continue;
 
-            foreach ($payments as $payment_id => $payment) {
-                if ($payment['status'] === 'pending' && 
-                    strtotime($payment['due_date']) <= strtotime($reminder_date) && 
-                    strtotime($payment['due_date']) > strtotime($current_date)) {
-                    try {
-                        // Generate payment link
-                        $link_data = $this->generate_payment_link($order, $payment_id, $payment);
-                        
-                        Emails::instance()->send_payment_reminder($order->get_id(), $payment_id, $link_data);
+            // Get payment status from order items
+            foreach ($order->get_items() as $item) {
+                if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                    $payment_status = $item->get_meta('_wcfp_payment_status');
+                    if (!empty($payment_status)) {
+                        foreach ($payment_status as $payment_id => $payment) {
+                            if ($payment['status'] === 'pending' && 
+                                strtotime($payment['due_date']) <= strtotime($reminder_date) && 
+                                strtotime($payment['due_date']) > strtotime($current_date)) {
+                                try {
+                                    // Generate payment link
+                                    $payment_handler = new Payment();
+                                    $link_data = $payment_handler->generate_payment_link(
+                                        $order->get_id(), 
+                                        $payment_id + 1
+                                    );
+                                    
+                                    // Send reminder with link
+                                    Emails::instance()->send_payment_reminder(
+                                        $order->get_id(), 
+                                        $payment_id + 1, 
+                                        $link_data
+                                    );
 
-                        // Add order note
-                        $order->add_order_note(
-                            sprintf(
-                                __('Payment reminder sent for installment #%d. Payment link generated with expiry on %s.', 'wc-flex-pay'),
-                                $payment_id,
-                                date_i18n(
-                                    get_option('date_format') . ' ' . get_option('time_format'),
-                                    strtotime($link_data['expires_at'])
-                                )
-                            ),
-                            false,
-                            true
-                        );
+                                    // Add order note
+                                    $order->add_order_note(
+                                        sprintf(
+                                            __('Payment reminder sent for installment #%d with payment link (expires: %s).', 'wc-flex-pay'),
+                                            $payment_id + 1,
+                                            date_i18n(
+                                                get_option('date_format') . ' ' . get_option('time_format'),
+                                                strtotime($link_data['expires_at'])
+                                            )
+                                        ),
+                                        false,
+                                        true
+                                    );
 
-                        // Log reminder sent
-                        $this->log_notification('reminder_sent', $payment_id, array(
-                            'due_date' => $payment['due_date'],
-                            'amount' => $payment['amount'],
-                            'link_expiry' => $link_data['expires_at']
-                        ));
-                    } catch (\Exception $e) {
-                        $this->log_error($e->getMessage(), array(
-                            'payment_id' => $payment_id,
-                            'order_id' => $order->get_id()
-                        ));
+                                    // Log reminder sent
+                                    $this->log_notification('reminder_sent', $payment_id + 1, array(
+                                        'due_date' => $payment['due_date'],
+                                        'amount' => $payment['amount'],
+                                        'link_expiry' => $link_data['expires_at']
+                                    ));
+                                } catch (\Exception $e) {
+                                    $this->log_error($e->getMessage(), array(
+                                        'payment_id' => $payment_id + 1,
+                                        'order_id' => $order->get_id()
+                                    ));
+                                }
+                            }
+                        }
                     }
                 }
             }

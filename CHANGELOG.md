@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.2] - 2025-01-28
+### Added
+- Support for account page in frontend assets loading
+- Enhanced template debugging with detailed logging
+
+### Changed
+- Improved template path handling and resolution
+- Enhanced template fallback system
+- Better organization of frontend assets loading
+
+
 ## [1.6.1] - 2025-01-28
 ### Changed
 - Removed duplicate payment schedule display after billing address in admin order screen
