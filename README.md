@@ -11,12 +11,10 @@ Enable flexible payment schedules for WooCommerce products with scheduled partia
 - **Installment Control**: Set custom amounts and due dates for each payment
 - **Payment Tracking**: Monitor payment status and history
 - **Sub-order System**: Individual orders for each installment
+- **Payment Date Management**: Advanced control over payment scheduling
+- **Grace Period Settings**: Flexible handling of overdue payments
 - **Status Management**: Track orders with specialized statuses:
-  - Flex Pay Pending
   - Flex Pay Partial
-  - Flex Pay Overdue
-  - Flex Pay Completed
-  - Flex Pay Failed
 
 ### Admin Features
 - **Product Integration**: Enable/disable flex pay per product
@@ -25,6 +23,8 @@ Enable flexible payment schedules for WooCommerce products with scheduled partia
 - **Payment History**: Enhanced view of complete payment records
 - **Visual Timeline**: See payment schedules and progress at a glance
 - **Sub-order Management**: Create and manage individual installment orders
+- **Monetary Statistics**: Comprehensive financial tracking in dashboard
+- **Payment Link System**: Generate and manage payment links with copy functionality
 
 ### Customer Experience
 - **Clear Schedules**: Visual payment timeline with installment tracking
@@ -32,8 +32,15 @@ Enable flexible payment schedules for WooCommerce products with scheduled partia
 - **Status Tracking**: Monitor payment progress and upcoming payments
 - **Payment Links**: Receive unique payment links for each installment
 - **Email Updates**: Automated notifications for payments
+- **Account Page Integration**: View and manage payments from account page
 
 ### Notification System
+- **Enhanced Email Templates** with:
+  - Comprehensive payment summaries
+  - Reusable components
+  - Action buttons
+  - Order details
+  - Payment status updates
 - **Automated Emails** for:
   - Payment completion
   - Payment failures
@@ -43,6 +50,14 @@ Enable flexible payment schedules for WooCommerce products with scheduled partia
   - Payment links
 - **Customizable Templates**: Modify email content and styling
 - **Status-Based Triggers**: Automatic notifications based on payment status
+- **Plain Text Alternatives**: Ensure delivery compatibility
+
+### Template System
+- **Enhanced Debugging**: Detailed template path logging
+- **Fallback System**: Reliable template resolution
+- **Common Styles**: Shared styling components
+- **Path Resolution**: Improved template handling
+- **Template Customization**: Override capability for all templates
 
 ## 📋 Requirements
 
@@ -83,20 +98,26 @@ Enable flexible payment schedules for WooCommerce products with scheduled partia
 ### Project Structure
 ```
 wc-flex-pay/
-├── assets/
-│   ├── css/                  # Compiled CSS
-│   ├── js/                   # JavaScript files
-│   └── scss/                 # SCSS source files
-│       ├── abstracts/        # Variables & utilities
-│       ├── admin/           # Admin styles
-│       ├── components/      # Shared components
-│       └── frontend/        # Customer-facing styles
-├── includes/
-│   ├── admin/              # Admin classes
-│   ├── emails/             # Email notification classes
-│   └── core classes        # Core functionality
-├── languages/             # Translation files
-└── templates/             # Template files
+├── assets/               # Frontend and admin assets
+│   ├── css/             # Compiled stylesheets
+│   ├── js/              # JavaScript functionality
+│   └── scss/            # Source styles
+│       ├── abstracts/   # Variables and utilities
+│       ├── admin/       # Admin-specific styles
+│       ├── components/  # Reusable components
+│       └── frontend/    # Customer-facing styles
+├── includes/            # Core plugin functionality
+│   ├── admin/          # Admin interfaces
+│   ├── emails/         # Email notification system
+│   └── gateways/       # Payment gateway integration
+└── templates/          # Template files
+    ├── admin/          # Admin interface templates
+    ├── emails/         # Email templates
+    │   ├── partials/   # Reusable email components
+    │   ├── plain/      # Plain text email versions
+    │   └── styles/     # Email styling
+    ├── order/          # Order display templates
+    └── single-product/ # Product page templates
 ```
 
 ### Styling System
@@ -108,6 +129,7 @@ wc-flex-pay/
 - Responsive design patterns
 - Table component system
 - Status badge system
+- Email styling components
 
 #### Utility Classes
 ```html
@@ -147,6 +169,29 @@ npm run sass
 npm run watch
 ```
 
+### Template System
+
+#### Debug Mode
+Enable template debugging in wp-config.php:
+```php
+define('WCFP_TEMPLATE_DEBUG', true);
+```
+
+This will:
+- Log template path resolution
+- Show template loading errors
+- Display template fallback information
+
+#### Template Hierarchy
+1. Theme Override: `yourtheme/wc-flex-pay/`
+2. Plugin Templates: `wp-content/plugins/wc-flex-pay/templates/`
+
+#### Email Templates
+- Base Template Structure
+- Reusable Components
+- Plain Text Alternatives
+- Customizable Styles
+
 ### Data Storage
 
 The plugin uses WordPress post meta for data storage:
@@ -168,14 +213,17 @@ Documentation for available hooks and filters coming soon.
 - Direct file access prevention
 - Secure payment processing
 - Sub-order access control
+- Template file protection
+- Payment link security
 
 ## 📝 Changelog
 
-### [1.3.0] - 2025-01-23
-- Added sub-order system for installments
-- Enhanced payment tracking and management
-- Improved admin interface and responsive design
-- Added payment link generation system
+### [1.6.2] - 2025-01-28
+- Support for account page in frontend assets loading
+- Enhanced template debugging with detailed logging
+- Improved template path handling and resolution
+- Enhanced template fallback system
+- Better organization of frontend assets loading
 
 [View full changelog](CHANGELOG.md)
 
@@ -189,7 +237,7 @@ GPL-2.0+
 
 ## 👨‍💻 Contributors
 
-- Ajith R N ([@ajith](https://github.com/ajith))
+- Ajith R N ([@ajithrn](https://github.com/ajithrn))
 
 ## 🤝 Contributing
 
