@@ -189,8 +189,10 @@ class Product {
      */
     private function validate_installments($installments) {
         $validated = array();
-        $last_date = null;
+        $last_future_date = null;
+        $current_date = current_time('Y-m-d');
 
+        // First validate all installments
         foreach ($installments as $installment) {
             $amount = wc_format_decimal($installment['amount']);
             if (!is_numeric($amount) || $amount <= 0) {
@@ -202,10 +204,7 @@ class Product {
                 throw new \Exception(__('Invalid due date format.', 'wc-flex-pay'));
             }
 
-            if ($last_date && strtotime($due_date) <= strtotime($last_date)) {
-                throw new \Exception(__('Due dates must be in chronological order.', 'wc-flex-pay'));
-            }
-
+            // Store validated installment
             $validated[] = array(
                 'number' => absint($installment['number']),
                 'amount' => $amount,
@@ -213,12 +212,20 @@ class Product {
                 'status' => 'pending',
                 'logs' => array()
             );
-
-            $last_date = $due_date;
         }
 
         if (empty($validated)) {
             throw new \Exception(__('At least one valid installment is required.', 'wc-flex-pay'));
+        }
+
+        // Sort installments by date for proper ordering
+        usort($validated, function($a, $b) {
+            return strtotime($a['due_date']) - strtotime($b['due_date']);
+        });
+
+        // Update installment numbers to match new order
+        foreach ($validated as $index => $installment) {
+            $validated[$index]['number'] = $index + 1;
         }
 
         return $validated;

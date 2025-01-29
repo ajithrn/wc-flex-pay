@@ -148,8 +148,33 @@ jQuery(function($) {
     // Remove installment row
     $(document).on('click', '.remove-installment', function() {
         $(this).closest('tr').remove();
+        updateInstallmentNumbers();
+        updateTotalAmount();
+    });
+
+    // Update total amount when installment amounts change
+    $(document).on('change', 'input[name^="wcfp_installments"][name$="[amount]"]', function() {
+        updateTotalAmount();
+    });
+
+    // Update installment numbers based on date order
+    function updateInstallmentNumbers() {
+        var $rows = $('.flex-pay-schedule tbody tr').get();
         
-        // Update installment numbers
+        // Sort rows by date
+        $rows.sort(function(a, b) {
+            var dateA = $(a).find('input[name*="[due_date]"]').val();
+            var dateB = $(b).find('input[name*="[due_date]"]').val();
+            return new Date(dateA) - new Date(dateB);
+        });
+
+        // Reorder rows in the table
+        var $tbody = $('.flex-pay-schedule tbody');
+        $.each($rows, function(idx, row) {
+            $tbody.append(row);
+        });
+
+        // Update numbers and names
         $('.flex-pay-schedule tbody tr').each(function(index) {
             var number = index + 1;
             $(this).find('td:first-child').html(
@@ -161,14 +186,7 @@ jQuery(function($) {
             $(this).find('input[name*="[amount]"]').attr('name', 'wcfp_installments[' + number + '][amount]');
             $(this).find('input[name*="[due_date]"]').attr('name', 'wcfp_installments[' + number + '][due_date]');
         });
-        
-        updateTotalAmount();
-    });
-
-    // Update total amount when installment amounts change
-    $(document).on('change', 'input[name^="wcfp_installments"][name$="[amount]"]', function() {
-        updateTotalAmount();
-    });
+    }
 
     // Function to update total amount
     function updateTotalAmount() {
@@ -179,5 +197,10 @@ jQuery(function($) {
         });
         $('#_regular_price').val(total.toFixed(2));
     }
+
+    // Auto-sort when dates change
+    $(document).on('change', 'input[name^="wcfp_installments"][name$="[due_date]"]', function() {
+        updateInstallmentNumbers();
+    });
 });
 </script>
