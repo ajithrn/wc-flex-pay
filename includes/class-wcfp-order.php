@@ -76,6 +76,7 @@ class Order {
         add_action('woocommerce_checkout_create_order_line_item', array($this, 'add_flex_pay_data_to_order_items'), 10, 4);
         add_action('woocommerce_checkout_order_processed', array($this, 'process_flex_pay_order'), 10, 3);
         add_filter('woocommerce_order_status_changed', array($this, 'handle_order_status_change'), 10, 4);
+        add_action('woocommerce_payment_complete', array($this, 'update_initial_payment_transaction'), 10, 1);
         
         // Order Display
         add_action('woocommerce_order_details_after_order_table', array($this, 'display_payment_schedule'));
@@ -134,14 +135,16 @@ class Order {
             $payment_status = array();
             
             foreach ($payments['installments'] as $installment) {
-                $status = strtotime($installment['due_date']) <= strtotime($current_date) ? 'completed' : 'pending';
+                // Check if this installment should be part of initial payment
+                $is_initial = strtotime($installment['due_date']) <= strtotime($current_date);
                 $payment_status[] = array(
                     'number' => $installment['number'],
                     'amount' => $installment['amount'],
                     'due_date' => $installment['due_date'],
-                    'status' => $status,
-                    'payment_date' => $status === 'completed' ? $current_date : null,
-                    'transaction_id' => null
+                    'status' => $is_initial ? 'processing' : 'pending',
+                    'payment_date' => null,
+                    'transaction_id' => null,
+                    'is_initial_payment' => $is_initial
                 );
             }
             
@@ -677,6 +680,77 @@ class Order {
             }
         }
         return null;
+    }
+
+    /**
+     * Update transaction IDs for initial payments when payment is completed
+     *
+     * @param int $order_id Order ID
+     */
+    public function update_initial_payment_transaction($order_id) {
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
+        }
+
+        $transaction_id = $order->get_transaction_id();
+        if (empty($transaction_id)) {
+            return;
+        }
+
+        $updated_installments = array();
+        $total_amount = 0;
+
+        foreach ($order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (!empty($payment_status)) {
+                    $has_updates = false;
+                    foreach ($payment_status as $index => $status) {
+                        if (!empty($status['is_initial_payment']) && $status['status'] === 'processing') {
+                            // Update initial payment with transaction ID
+                            $payment_status[$index]['status'] = 'completed';
+                            $payment_status[$index]['payment_date'] = current_time('Y-m-d');
+                            $payment_status[$index]['transaction_id'] = $transaction_id;
+                            $has_updates = true;
+                            
+                            $updated_installments[] = $status['number'];
+                            $total_amount += $status['amount'];
+                        }
+                    }
+                    
+                    if ($has_updates) {
+                        $item->update_meta_data('_wcfp_payment_status', $payment_status);
+                        $item->save();
+                    }
+                }
+            }
+        }
+
+        if (!empty($updated_installments)) {
+            // Sort installment numbers for display
+            sort($updated_installments);
+            
+            // Add note about transaction ID for all completed payments
+            $this->add_order_note_with_icon(
+                $order,
+                sprintf(
+                    __('Initial Flex Pay payment completed for installment(s) %s. Amount: %s, Transaction ID: %s', 'wc-flex-pay'),
+                    implode(', ', $updated_installments),
+                    wc_price($total_amount),
+                    $transaction_id
+                ),
+                'payment'
+            );
+
+            // Update order meta to track initial payment
+            update_post_meta($order_id, '_wcfp_initial_payment_completed', true);
+            update_post_meta($order_id, '_wcfp_initial_payment_transaction_id', $transaction_id);
+            update_post_meta($order_id, '_wcfp_initial_payment_installments', $updated_installments);
+
+            // Check if payment completion affects order status
+            $this->check_payment_completion($order_id, '', '');
+        }
     }
 
     /**
