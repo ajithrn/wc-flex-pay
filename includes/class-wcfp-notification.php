@@ -779,7 +779,9 @@ class Notification {
 
         if (did_action('woocommerce_email_header')) {
             // We're in an email template
-            return $order;
+            if ($order instanceof \WC_Order) {
+                return $order;
+            }
         }
 
         return false;

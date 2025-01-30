@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.3] - 2025-01-30
+### Fixed
+- Added type check in notification system to ensure order object is valid WC_Order instance
+- Resolved validation issues when all flex pay dates are in the past
+- Improved installment date validation and ordering
+
+### Enhanced
+- Admin UI with automatic sorting of installments by date
+- Automatic updating of installment numbers based on date order
+
 ## [1.6.2] - 2025-01-28
 ### Added
 - Support for account page in frontend assets loading
