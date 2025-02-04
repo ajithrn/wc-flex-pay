@@ -17,7 +17,7 @@ if (empty($payments) || empty($payments['installments'])) {
 $today = current_time('timestamp');
 $initial_payment = 0;
 $future_installments = array();
-$overdue_exists = false;
+$overdue_exists = true;
 
 foreach ($payments['installments'] as $installment) {
     $due_date = strtotime($installment['due_date']);
@@ -34,6 +34,11 @@ if (empty($initial_payment)) {
     array_shift($future_installments);
 }
 
+// Check if there is one ore more installment in the initial payment. 
+$first_installment = !empty($payments['installments'][0]) ? $payments['installments'][0]['amount'] : 0;
+if ($first_installment == $initial_payment) { 
+  $overdue_exists = false;
+}
 // Output the form start
 echo isset($form_start) ? $form_start : '';
 ?>
@@ -99,6 +104,34 @@ echo isset($form_start) ? $form_start : '';
                 </small>
             </div>
         </div>
+    </div>
+
+    <div class="wcfp-deposit-notice">
+        <?php         
+        
+        if ($overdue_exists) {            
+          printf(
+            /* translators: 1: first installment amount, 2: initial payment amount, 3: policy page URL */
+            wp_kses(
+                __('The first installment of %1$s is a nonrefundable deposit to secure your spot. Any additional amounts in your initial payment of %2$s are partially refundable. This is not the full price of the tour. After completing this payment, you will receive an email with your payment plan details and everything you need to prepare for your journey. Please refer to our <a href="%3$s" target="_blank">cancellation and refund policy</a> for complete details.', 'wc-flex-pay'),
+                array('a' => array('href' => array(), 'target' => array()))
+            ),
+            wc_price($first_installment),
+            wc_price($initial_payment),
+            esc_url(get_privacy_policy_url())
+        );
+        } else {
+          printf(
+                /* translators: 1: first installment amount, 2: policy page URL */
+                wp_kses(
+                    __('The first installment of %1$s is a nonrefundable deposit to secure your spot. This is not the full price of the tour. After completing this payment, you will receive an email with your payment plan details and everything you need to prepare for your journey. Please refer to our <a href="%2$s" target="_blank">cancellation and refund policy</a> for complete details.', 'wc-flex-pay'),
+                    array('a' => array('href' => array(), 'target' => array()))
+                ),
+                wc_price($first_installment),
+                esc_url(get_privacy_policy_url())
+            );
+        }
+        ?>
     </div>
 
     <?php if (!empty($future_installments)) : ?>

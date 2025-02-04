@@ -9,6 +9,23 @@
   border: 1px solid $color-border;
 }
 
+.wcfp-deposit-notice {
+  margin-bottom: $spacing-lg;
+  padding: $spacing-md;
+  background-color: $color-background-light;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-md;
+  font-size: $font-size-sm;
+  a {
+    color: $color-brand;
+    font-weight: $font-weight-medium;
+    border-bottom: 1px dotted $color-brand;
+    &:hover {
+      border-bottom: 1px solid $color-brand;
+    }
+  }
+}
+
 .wcfp-payment-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -160,7 +177,6 @@
     margin: 0 0 $spacing-lg;
     color: $color-primary;
     font-size: $font-size-lg;
-    text-align: center;
   }
 
   ul {
