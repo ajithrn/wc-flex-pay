@@ -19,13 +19,6 @@ if (!defined('ABSPATH')) {
 class Order_Details extends Email_Base {
 
     /**
-     * Track sent orders to prevent duplicates
-     *
-     * @var array
-     */
-    private static $sent_orders = array();
-
-    /**
      * Constructor
      */
     public function __construct() {
@@ -41,22 +34,6 @@ class Order_Details extends Email_Base {
 
         // Triggers for this email
         add_action('wcfp_send_order_details_notification', array($this, 'trigger'), 10, 3);
-
-        // Reset sent orders tracking daily
-        add_action('wp_loaded', array($this, 'maybe_reset_sent_orders'));
-    }
-
-    /**
-     * Reset sent orders tracking if it's a new day
-     */
-    public function maybe_reset_sent_orders() {
-        $last_reset = get_transient('wcfp_order_details_last_reset');
-        $today = date('Y-m-d');
-
-        if ($last_reset !== $today) {
-            self::$sent_orders = array();
-            set_transient('wcfp_order_details_last_reset', $today, DAY_IN_SECONDS);
-        }
     }
 
     /**
@@ -115,10 +92,6 @@ class Order_Details extends Email_Base {
      * @param array $payment_data Payment data.
      */
     public function trigger($order_id, $installment_number = 1, $payment_data = array()) {
-        // Prevent duplicate sends for the same order
-        if (isset(self::$sent_orders[$order_id])) {
-            return;
-        }
 
         $this->setup_locale();
 
@@ -144,10 +117,6 @@ class Order_Details extends Email_Base {
                         $this->get_attachments()
                     );
 
-                    // Only mark as sent if email was sent successfully
-                    if ($sent) {
-                        self::$sent_orders[$order_id] = true;
-                    }
                 }
             }
         }

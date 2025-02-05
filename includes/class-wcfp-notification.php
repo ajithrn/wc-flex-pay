@@ -814,20 +814,55 @@ class Notification {
     public function send_initial_order_emails($order_id, $posted_data, $order) {
         if ($this->is_flex_pay_order($order)) {
             try {
-                // Get total number of installments
-                $total_installments = 0;
+                // Get payment schedule and totals
+                $total_amount = 0;
+                $paid_amount = 0;
+                $payment_schedule = array();
+                
                 foreach ($order->get_items() as $item) {
-                    $payment_status = $item->get_meta('_wcfp_payment_status');
-                    if (!empty($payment_status)) {
-                        $total_installments = count($payment_status);
-                        break;
+                    if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                        $payment_status = $item->get_meta('_wcfp_payment_status');
+                        if (!empty($payment_status)) {
+                            $payment_schedule = $payment_status;
+                            foreach ($payment_status as $payment) {
+                                $total_amount += $payment['amount'];
+                                if ($payment['status'] === 'completed') {
+                                    $paid_amount += $payment['amount'];
+                                }
+                            }
+                            break;
+                        }
                     }
                 }
 
-                // Send a single email with complete payment schedule
-                if ($total_installments > 0) {
-                    Emails::instance()->send_order_details($order_id, $total_installments);
+                if (!empty($payment_schedule)) {
+                    // Send order details email first
+                    Emails::instance()->send_order_details(
+                        $order_id,
+                        1,
+                        array(
+                            'total_amount' => $total_amount,
+                            'paid_amount' => $paid_amount,
+                            'pending_amount' => $total_amount - $paid_amount,
+                            'payment_schedule' => $payment_schedule
+                        )
+                    );
                     $this->log_notification('initial_order_sent', $order_id);
+
+                    // Send payment complete email for first installment
+                    Emails::instance()->send_payment_complete(
+                        $order_id,
+                        1,
+                        array(
+                            'transaction_id' => $order->get_transaction_id(),
+                            'payment_method' => $order->get_payment_method_title(),
+                            'payment_date' => current_time('mysql'),
+                            'total_amount' => $total_amount,
+                            'paid_amount' => $paid_amount,
+                            'pending_amount' => $total_amount - $paid_amount
+                        )
+                    );
+                    $this->log_notification('payment_complete_sent', $order_id);
                 }
             } catch (\Exception $e) {
                 $this->log_error($e->getMessage(), array('order_id' => $order_id));
@@ -846,13 +881,57 @@ class Notification {
                 $parent_order_id = $order->get_meta('_wcfp_parent_order');
                 
                 if ($parent_order_id && $installment_number) {
-                    Emails::instance()->send_payment_complete($parent_order_id, $installment_number, array(
-                        'transaction_id' => $order->get_transaction_id(),
-                        'payment_method' => $order->get_payment_method_title(),
-                        'payment_date' => current_time('mysql'),
-                        'sub_order_id' => $order_id
-                    ));
+                    // Get parent order and payment details
+                    $parent_order = wc_get_order($parent_order_id);
+                    $total_amount = 0;
+                    $paid_amount = 0;
+                    $payment_schedule = array();
+                    
+                    foreach ($parent_order->get_items() as $item) {
+                        if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                            $payment_status = $item->get_meta('_wcfp_payment_status');
+                            if (!empty($payment_status)) {
+                                $payment_schedule = $payment_status;
+                                foreach ($payment_status as $payment) {
+                                    $total_amount += $payment['amount'];
+                                    if ($payment['status'] === 'completed') {
+                                        $paid_amount += $payment['amount'];
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    // Send payment complete email
+                    Emails::instance()->send_payment_complete(
+                        $parent_order_id,
+                        $installment_number,
+                        array(
+                            'transaction_id' => $order->get_transaction_id(),
+                            'payment_method' => $order->get_payment_method_title(),
+                            'payment_date' => current_time('mysql'),
+                            'sub_order_id' => $order_id,
+                            'total_amount' => $total_amount,
+                            'paid_amount' => $paid_amount,
+                            'pending_amount' => $total_amount - $paid_amount,
+                            'payment_schedule' => $payment_schedule
+                        )
+                    );
                     $this->log_notification('payment_complete_sent', $order_id);
+
+                    // Send updated order details email
+                    Emails::instance()->send_order_details(
+                        $parent_order_id,
+                        $installment_number,
+                        array(
+                            'total_amount' => $total_amount,
+                            'paid_amount' => $paid_amount,
+                            'pending_amount' => $total_amount - $paid_amount,
+                            'payment_schedule' => $payment_schedule
+                        )
+                    );
+                    $this->log_notification('order_details_sent', $order_id);
                 }
             } catch (\Exception $e) {
                 $this->log_error($e->getMessage(), array('order_id' => $order_id));

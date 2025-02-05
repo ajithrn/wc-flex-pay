@@ -755,6 +755,44 @@ class Payment {
             if ($result['result'] === 'success') {
                 // Let the Order class handle status updates via woocommerce_payment_complete hook
                 $sub_order->payment_complete();
+
+                // Get parent order and payment details
+                $parent_order = wc_get_order($parent_order_id);
+                $total_amount = 0;
+                $paid_amount = 0;
+                $payment_schedule = array();
+                
+                foreach ($parent_order->get_items() as $item) {
+                    if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                        $payment_status = $item->get_meta('_wcfp_payment_status');
+                        if (!empty($payment_status)) {
+                            $payment_schedule = $payment_status;
+                            foreach ($payment_status as $payment) {
+                                $total_amount += $payment['amount'];
+                                if ($payment['status'] === 'completed') {
+                                    $paid_amount += $payment['amount'];
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // Send payment complete email
+                Emails::instance()->send_payment_complete(
+                    $parent_order_id,
+                    $installment_number,
+                    array(
+                        'transaction_id' => $sub_order->get_transaction_id(),
+                        'payment_method' => $sub_order->get_payment_method_title(),
+                        'payment_date' => current_time('mysql'),
+                        'sub_order_id' => $sub_order->get_id(),
+                        'total_amount' => $total_amount,
+                        'paid_amount' => $paid_amount,
+                        'pending_amount' => $total_amount - $paid_amount,
+                        'payment_schedule' => $payment_schedule
+                    )
+                );
                 
                 // Log event
                 $this->log_event(

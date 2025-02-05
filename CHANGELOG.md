@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.9] - 2025-02-05
+### Fixed
+- Email notifications for flex pay orders:
+  - Send both order details and payment complete emails for initial payment
+  - Send updated order details after each installment payment
+  - Include complete payment schedule in all notifications
+
 ## [1.6.8] - 2025-02-05
 ### Changed
 - Enhanced payment link expiry logic to use extended period for future installments
