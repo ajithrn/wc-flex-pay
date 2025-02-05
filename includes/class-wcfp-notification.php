@@ -234,8 +234,9 @@ class Notification {
         }
 
         $reminder_days = absint(get_option('wcfp_reminder_days', 3));
-        $reminder_date = date('Y-m-d H:i:s', strtotime("+{$reminder_days} days"));
         $current_date = current_time('mysql');
+        $current_timestamp = strtotime($current_date);
+        $reminder_date = date('Y-m-d H:i:s', strtotime("+{$reminder_days} days", $current_timestamp));
 
         if ($order_id) {
             $order = wc_get_order($order_id);
@@ -262,10 +263,14 @@ class Notification {
                     $payment_status = $item->get_meta('_wcfp_payment_status');
                     if (!empty($payment_status)) {
                         foreach ($payment_status as $payment_id => $payment) {
-                            if ($payment['status'] === 'pending' && 
-                                strtotime($payment['due_date']) <= strtotime($reminder_date) && 
-                                strtotime($payment['due_date']) > strtotime($current_date)) {
-                                try {
+                            if ($payment['status'] === 'pending' && strtotime($payment['due_date']) > $current_timestamp) {
+                                $days_until_due = floor((strtotime($payment['due_date']) - $current_timestamp) / DAY_IN_SECONDS);
+                                
+                                // Send reminder if either:
+                                // 1. Payment is due within reminder days
+                                // 2. Payment is due sooner than reminder timeframe
+                                if ($days_until_due <= $reminder_days) {
+                                    try {
                                     // Generate payment link
                                     $payment_handler = new Payment();
                                     $link_data = $payment_handler->generate_payment_link(
@@ -313,6 +318,7 @@ class Notification {
             }
         }
     }
+    }
 
     /**
      * Generate payment link with optional extended expiry for overdue payments
@@ -327,23 +333,18 @@ class Notification {
         // Generate unique token
         $token = wp_generate_password(32, false);
         
-        // Calculate expiry based on payment status and settings
+        // Calculate expiry based on due date and grace period
         $grace_period = absint(get_option('wcfp_overdue_grace_period', 3));
         $extended_period = absint(get_option('wcfp_extended_grace_period', 7));
         $current_date = current_time('timestamp');
+        $due_date = strtotime($payment['due_date']);
 
         if ($is_overdue) {
             // Extended expiry for overdue payments
             $expiry = strtotime("+{$extended_period} days", $current_date);
         } else {
-            $due_date = strtotime($payment['due_date']);
-            if ($current_date > $due_date) {
-                // Payment is overdue - set expiry to grace period from now
-                $expiry = strtotime("+{$grace_period} days", $current_date);
-            } else {
-                // Payment is upcoming - set expiry to grace period after due date
-                $expiry = strtotime("+{$grace_period} days", $due_date);
-            }
+            // For upcoming payments, link is valid until grace period after due date
+            $expiry = strtotime("+{$grace_period} days", $due_date);
         }
 
         // Create link data

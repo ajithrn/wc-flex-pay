@@ -95,7 +95,6 @@ class Payment {
      */
     public function generate_payment_link($order_id, $installment_number, $args = array()) {
         $defaults = array(
-            'expires_in' => 72, // Hours until link expires
             'regenerate' => false // Whether to regenerate if link exists
         );
         $args = wp_parse_args($args, $defaults);
@@ -110,6 +109,11 @@ class Payment {
                 return $links[$link_key];
             }
         }
+
+        // Get grace periods
+        $grace_period = absint(get_option('wcfp_overdue_grace_period', 3));
+        $extended_period = absint(get_option('wcfp_extended_grace_period', 7));
+        $current_timestamp = current_time('timestamp');
 
         // Get parent order and verify installment
         $parent_order = wc_get_order($order_id);
@@ -182,9 +186,38 @@ class Payment {
             update_post_meta($order_id, '_wcfp_payments', $payments);
         }
 
+        // Get installment data from order items
+        $installment = null;
+        foreach ($parent_order->get_items() as $item) {
+            if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $payment_status = $item->get_meta('_wcfp_payment_status');
+                if (!empty($payment_status[$installment_number - 1])) {
+                    $installment = $payment_status[$installment_number - 1];
+                    break;
+                }
+            }
+        }
+
+        if (!$installment) {
+            throw new \Exception(__('Invalid installment.', 'wc-flex-pay'));
+        }
+
+        if ($installment['status'] === 'completed') {
+            throw new \Exception(__('This installment has already been paid.', 'wc-flex-pay'));
+        }
+
+        // Calculate expiry based on due date
+        $due_timestamp = strtotime($installment['due_date']);
+        if ($due_timestamp > $current_timestamp) {
+            // Future payment - valid until extended period after due date
+            $expires_at = date('Y-m-d H:i:s', strtotime("+{$extended_period} days", $due_timestamp));
+        } else {
+            // Overdue payment - extended period from now
+            $expires_at = date('Y-m-d H:i:s', strtotime("+{$extended_period} days", $current_timestamp));
+        }
+
         // Generate new link
         $token = wp_generate_password(32, false);
-        $expires_at = date('Y-m-d H:i:s', strtotime("+{$args['expires_in']} hours"));
 
         $link_data = array(
             'token' => $token,
