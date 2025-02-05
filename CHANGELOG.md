@@ -1,6 +1,11 @@
 # Changelog
 
-## [1.6.6] - 2025-02-05
+## [1.6.7] - 2025-02-05
+### Changed
+- Removed "Upcoming Payments" notice from cart and checkout pages
+- Simplified cart subtotal display by removing next payment information
+
+## [1.6.6] - 2025-02-04
 ### Added
 - Admin notification system for payment failures and overdue payments
 - Enhanced payment history tracking in email templates
@@ -13,6 +18,7 @@
   - Improved payment summary display
   - Better visual hierarchy with styled notices
 - Removed duplicate installment notice at checkout
+- Removed "Upcoming Payments" notice from cart and checkout pages
 
 ### Enhanced
 - Payment completion workflow with better sub-order tracking

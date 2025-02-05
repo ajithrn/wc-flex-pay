@@ -40,7 +40,7 @@ class Product {
         add_filter('woocommerce_cart_item_price', array($this, 'modify_cart_item_price'), 10, 3);
         add_filter('woocommerce_cart_item_subtotal', array($this, 'modify_cart_item_subtotal'), 10, 3);
         add_action('woocommerce_before_calculate_totals', array($this, 'adjust_cart_prices'), 10, 1);
-        add_action('woocommerce_cart_totals_before_order_total', array($this, 'display_cart_installment_notice'));
+        //add_action('woocommerce_cart_totals_before_order_total', array($this, 'display_cart_installment_notice'));
         add_action('woocommerce_review_order_before_payment', array($this, 'display_checkout_installment_notice'));
         add_action('woocommerce_checkout_order_processed', array($this, 'add_future_payments_note'), 10, 3);
         
@@ -460,16 +460,6 @@ class Product {
                     /* translators: %s: pending amount */
                     __('+ %s in installments', 'wc-flex-pay'),
                     wc_price($pending_amount)
-                ) . '</small>';
-                
-                // Add next payment info
-                $next_installment = reset($future_installments);
-                $output .= '<small class="wcfp-next-payment">' . sprintf(
-                    /* translators: 1: installment number, 2: amount, 3: date */
-                    __('Next: Installment %1$d - %2$s on %3$s', 'wc-flex-pay'),
-                    $next_installment['number'],
-                    wc_price($next_installment['amount'] * $quantity),
-                    date_i18n(get_option('date_format'), strtotime($next_installment['due_date']))
                 ) . '</small>';
                 $output .= '</div>';
             }
