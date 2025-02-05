@@ -71,7 +71,7 @@ foreach ($order->get_items() as $item) {
 }
 ?>
 
-<p class="wcfp-greeting">
+<div class="wcfp-success-notice" style="margin-bottom: 20px; padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; color: #155724;">
     <?php
     printf(
         /* translators: %1$s: customer first name, %2$s: order number */
@@ -80,37 +80,65 @@ foreach ($order->get_items() as $item) {
         esc_html($order->get_order_number())
     );
     ?>
-</p>
+</div>
 
-<?php
-// Include payment summary if file exists
-$payment_summary_template = WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php';
-if (file_exists($payment_summary_template)) {
-    include $payment_summary_template;
-}
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
+    <h3 class="wcfp-heading"><?php esc_html_e('Payment Summary', 'wc-flex-pay'); ?></h3>
+    <?php include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php'; ?>
+</div>
 
-// Include order details if file exists
-$order_details_template = WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php';
-if (file_exists($order_details_template)) {
-    include $order_details_template;
-}
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
+    <h3 class="wcfp-heading"><?php esc_html_e('Order Details', 'wc-flex-pay'); ?></h3>
+    <?php include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php'; ?>
+</div>
 
-// Prepare action buttons if URL is available
-if (!empty($link_data['url'])) {
-    $actions = array(
-        'pay' => array(
-            'url' => $link_data['url'],
-            'text' => __('Pay Now', 'wc-flex-pay')
-        )
-    );
-    $primary_action = 'pay';
+<?php if (!empty($link_data['url'])) : ?>
+    <div class="wcfp-summary-box" style="margin-bottom: 30px;">
+        <h3 class="wcfp-heading"><?php esc_html_e('Payment Link', 'wc-flex-pay'); ?></h3>
+        <div class="wcfp-installment-details">
+            <?php if (!empty($payment_data['current_installment'])) : ?>
+                <p>
+                    <?php
+                    printf(
+                        /* translators: 1: installment number, 2: formatted amount */
+                        esc_html__('This payment link is for installment #%1$d in the amount of %2$s.', 'wc-flex-pay'),
+                        $payment_data['current_installment']['number'],
+                        wc_price($payment_data['current_installment']['amount'])
+                    );
+                    ?>
+                </p>
+            <?php endif; ?>
 
-    // Include action buttons if file exists
-    $action_buttons_template = WCFP_PLUGIN_DIR . 'templates/emails/partials/action-buttons.php';
-    if (file_exists($action_buttons_template)) {
-        include $action_buttons_template;
-    }
-}
+            <p><?php esc_html_e('Please use the button below to make your payment:', 'wc-flex-pay'); ?></p>
+
+            <?php
+            $actions = array(
+                'pay' => array(
+                    'url' => $link_data['url'],
+                    'text' => __('Pay Now', 'wc-flex-pay')
+                )
+            );
+            $primary_action = 'pay';
+
+            include WCFP_PLUGIN_DIR . 'templates/emails/partials/action-buttons.php';
+
+            if (!empty($link_data['expires_at'])) : ?>
+                <p class="wcfp-text-small" style="margin-top: 15px;">
+                    <?php
+                    printf(
+                        /* translators: %s: formatted date */
+                        esc_html__('This payment link will expire on %s.', 'wc-flex-pay'),
+                        date_i18n(
+                            get_option('date_format') . ' ' . get_option('time_format'),
+                            strtotime($link_data['expires_at'])
+                        )
+                    );
+                    ?>
+                </p>
+            <?php endif; ?>
+        </div>
+    </div>
+<?php endif;
 
 /**
  * Show user-defined additional content - this is set in each email's settings.

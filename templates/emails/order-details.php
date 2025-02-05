@@ -71,33 +71,45 @@ usort($installments['completed'], function($a, $b) {
 });
 ?>
 
-<div class="wcfp-greeting">
+<div class="wcfp-success-notice" style="margin-bottom: 20px; padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; color: #155724;">
+    <?php if (!empty($payment_data['is_final'])) : ?>
+        <p>
+            <?php
+            printf(
+                /* translators: %1$s: customer first name, %2$s: order number */
+                esc_html__('Hi %1$s, all payments for order #%2$s have been completed. Thank you for your business!', 'wc-flex-pay'),
+                esc_html($order->get_billing_first_name()),
+                esc_html($order->get_order_number())
+            );
+            ?>
+        </p>
+        <p style="margin-top: 10px;">
+            <?php esc_html_e('Below is a summary of all your payments for this order.', 'wc-flex-pay'); ?>
+        </p>
+    <?php else : ?>
+        <?php
+        printf(
+            /* translators: %1$s: customer first name, %2$s: order number */
+            esc_html__('Hi %1$s, here are your payment details for order #%2$s.', 'wc-flex-pay'),
+            esc_html($order->get_billing_first_name()),
+            esc_html($order->get_order_number())
+        );
+        ?>
+    <?php endif; ?>
+</div>
+
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
+    <h3 class="wcfp-heading"><?php esc_html_e('Payment Summary', 'wc-flex-pay'); ?></h3>
     <?php
-    printf(
-        /* translators: %1$s: customer first name, %2$s: order number */
-        esc_html__('Hi %1$s, here are your payment details for order #%2$s.', 'wc-flex-pay'),
-        esc_html($order->get_billing_first_name()),
-        esc_html($order->get_order_number())
-    );
+    // Include payment summary
+    include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php';
     ?>
 </div>
 
-<div class="wcfp-section">
-    <h3 class="wcfp-heading"><?php esc_html_e('Payment Summary', 'wc-flex-pay'); ?></h3>
-    <div class="wcfp-summary-box">
-        <?php
-        // Include payment summary
-        include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php';
-        ?>
-    </div>
-</div>
-
 <?php if (!empty($installments['upcoming'])) : ?>
-    <div class="wcfp-divider"></div>
-    <div class="wcfp-section">
+    <div class="wcfp-summary-box" style="margin-bottom: 30px;">
         <h3 class="wcfp-heading"><?php esc_html_e('Upcoming Payments', 'wc-flex-pay'); ?></h3>
-        <div class="wcfp-summary-box">
-            <table class="wcfp-summary-table">
+        <table class="wcfp-summary-table">
                 <thead>
                     <tr>
                         <th><?php esc_html_e('Installment', 'wc-flex-pay'); ?></th>
@@ -136,16 +148,13 @@ usort($installments['completed'], function($a, $b) {
                     <?php endforeach; ?>
                 </tbody>
             </table>
-        </div>
     </div>
 <?php endif; ?>
 
 <?php if (!empty($installments['completed'])) : ?>
-    <div class="wcfp-divider"></div>
-    <div class="wcfp-section">
+    <div class="wcfp-summary-box" style="margin-bottom: 30px;">
         <h3 class="wcfp-heading"><?php esc_html_e('Completed Payments', 'wc-flex-pay'); ?></h3>
-        <div class="wcfp-summary-box">
-            <table class="wcfp-summary-table">
+        <table class="wcfp-summary-table">
                 <thead>
                     <tr>
                         <th><?php esc_html_e('Installment', 'wc-flex-pay'); ?></th>
@@ -182,20 +191,15 @@ usort($installments['completed'], function($a, $b) {
                     <?php endforeach; ?>
                 </tbody>
             </table>
-        </div>
     </div>
 <?php endif; ?>
 
-<div class="wcfp-divider"></div>
-
-<div class="wcfp-section">
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
     <h3 class="wcfp-heading"><?php esc_html_e('Order Details', 'wc-flex-pay'); ?></h3>
-    <div class="wcfp-summary-box">
-        <?php
-        // Include order details
-        include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php';
-        ?>
-    </div>
+    <?php
+    // Include order details
+    include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php';
+    ?>
 </div>
 
 <?php

@@ -73,7 +73,7 @@ usort($upcoming_payments, function($a, $b) {
 });
 ?>
 
-<div class="wcfp-greeting">
+<div class="wcfp-success-notice" style="margin-bottom: 20px; padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; color: #155724;">
     <?php
     printf(
         /* translators: %1$s: customer first name, %2$s: order number */
@@ -84,25 +84,21 @@ usort($upcoming_payments, function($a, $b) {
     ?>
 </div>
 
-<div class="wcfp-section">
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
     <h3 class="wcfp-heading"><?php esc_html_e('Payment Summary', 'wc-flex-pay'); ?></h3>
-    <div class="wcfp-summary-box">
-        <?php
-        // Include payment summary
-        include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php';
-        ?>
-    </div>
+    <?php
+    // Include payment summary
+    include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php';
+    ?>
 </div>
 
 <?php if (!empty($payment_data['current_installment'])) : ?>
-    <div class="wcfp-divider"></div>
-    <div class="wcfp-section">
-        <h3 class="wcfp-heading"><?php esc_html_e('Current Payment Due', 'wc-flex-pay'); ?></h3>
-        <div class="wcfp-summary-box">
-            <table class="wcfp-summary-table">
+    <div class="wcfp-summary-box" style="margin-bottom: 30px;">
+        <h3 class="wcfp-heading"><?php esc_html_e('Current Payment', 'wc-flex-pay'); ?></h3>
+        <table class="wcfp-summary-table">
                 <tr>
                     <th><?php esc_html_e('Installment', 'wc-flex-pay'); ?></th>
-                    <td>
+                    <td class="amount">
                         <?php 
                         printf(
                             /* translators: %d: installment number */
@@ -118,7 +114,7 @@ usort($upcoming_payments, function($a, $b) {
                 </tr>
                 <tr>
                     <th><?php esc_html_e('Due Date', 'wc-flex-pay'); ?></th>
-                    <td>
+                    <td class="amount">
                         <?php 
                         echo date_i18n(
                             get_option('date_format'),
@@ -128,68 +124,15 @@ usort($upcoming_payments, function($a, $b) {
                     </td>
                 </tr>
             </table>
-        </div>
     </div>
 <?php endif; ?>
 
-<?php if (!empty($upcoming_payments)) : ?>
-    <div class="wcfp-divider"></div>
-    <div class="wcfp-section">
-        <h3 class="wcfp-heading"><?php esc_html_e('Upcoming Payments', 'wc-flex-pay'); ?></h3>
-        <div class="wcfp-summary-box">
-            <table class="wcfp-summary-table">
-                <thead>
-                    <tr>
-                        <th><?php esc_html_e('Installment', 'wc-flex-pay'); ?></th>
-                        <th><?php esc_html_e('Amount', 'wc-flex-pay'); ?></th>
-                        <th><?php esc_html_e('Due Date', 'wc-flex-pay'); ?></th>
-                        <th><?php esc_html_e('Status', 'wc-flex-pay'); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($upcoming_payments as $payment) : ?>
-                        <tr>
-                            <td>
-                                <?php 
-                                printf(
-                                    /* translators: %d: installment number */
-                                    esc_html__('#%d', 'wc-flex-pay'),
-                                    $payment['number']
-                                ); 
-                                ?>
-                            </td>
-                            <td class="amount"><?php echo wc_price($payment['amount']); ?></td>
-                            <td>
-                                <?php 
-                                echo date_i18n(
-                                    get_option('date_format'),
-                                    strtotime($payment['due_date'])
-                                ); 
-                                ?>
-                            </td>
-                            <td>
-                                <span class="wcfp-status <?php echo esc_attr($payment['status']); ?>">
-                                    <?php echo esc_html(ucfirst($payment['status'])); ?>
-                                </span>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-<?php endif; ?>
-
-<div class="wcfp-divider"></div>
-
-<div class="wcfp-section">
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
     <h3 class="wcfp-heading"><?php esc_html_e('Order Details', 'wc-flex-pay'); ?></h3>
-    <div class="wcfp-summary-box">
-        <?php
-        // Include order details
-        include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php';
-        ?>
-    </div>
+    <?php
+    // Include order details
+    include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php';
+    ?>
 </div>
 
 <?php

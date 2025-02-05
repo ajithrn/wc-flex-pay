@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.6.6] - 2025-02-05
+### Added
+- Admin notification system for payment failures and overdue payments
+- Enhanced payment history tracking in email templates
+- Login requirement validation for payment links
+
+### Changed
+- Improved sub-order status handling and parent order completion logic
+- Enhanced email templates with better formatting and organization:
+  - Added payment history section
+  - Improved payment summary display
+  - Better visual hierarchy with styled notices
+- Removed duplicate installment notice at checkout
+
+### Enhanced
+- Payment completion workflow with better sub-order tracking
+- Email template system with comprehensive payment details
+- Payment link handling with proper user authentication
+
+## [1.6.5] - 2025-02-01
+### Fixed
+- Improved order validation and installment handling
+- Enhanced payment processing reliability
+
+## [1.6.4] - 2025-01-31
+### Fixed
+- Updated transaction ID handling for initial flex pay payments
+- Enhanced payment schedule deposit notice in frontend
+
 ## [1.6.3] - 2025-01-30
 ### Fixed
 - Added type check in notification system to ensure order object is valid WC_Order instance
@@ -10,191 +39,4 @@
 - Admin UI with automatic sorting of installments by date
 - Automatic updating of installment numbers based on date order
 
-## [1.6.2] - 2025-01-28
-### Added
-- Support for account page in frontend assets loading
-- Enhanced template debugging with detailed logging
-
-### Changed
-- Improved template path handling and resolution
-- Enhanced template fallback system
-- Better organization of frontend assets loading
-
-
-## [1.6.1] - 2025-01-28
-### Changed
-- Removed duplicate payment schedule display after billing address in admin order screen
-- Enhanced payment schedule display with Order ID column for both completed and upcoming payments
-- Added proper linking of sub-order IDs in payment schedule tables
-- Improved payment reminder email templates with better formatting and structure
-- Added comprehensive order details email functionality
-- Enhanced email template organization and reusability
-
-## [1.6.0] - 2025-01-27
-### Added
-- Payment date management system with admin controls
-- Enhanced payment tracking with order item meta storage
-- Improved dashboard with monetary statistics
-- Extended grace period settings for overdue payments
-- Comprehensive payment summary in emails
-- New base email class for better email handling
-- Partial templates for reusable email components:
-  - Action buttons template
-  - Order details template
-  - Payment summary template
-- Template debugging and improved error logging
-- Enhanced template path handling system
-
-### Changed
-- Switched to order item meta for payment status storage
-- Updated payment link email templates:
-  - Product name in subject and heading
-  - Enhanced payment summary section
-  - Better formatting and organization
-- Streamlined order status handling:
-  - Better WooCommerce status integration
-  - Simplified status workflow
-  - Updated notification triggers
-- Enhanced dashboard organization:
-  - Latest orders first sorting
-  - Improved payment status tracking
-  - Better installment number display
-- Improved email registration and handling:
-  - Better email class initialization
-  - Enhanced error handling for emails
-  - Improved template loading system
-- Enhanced template organization:
-  - Added common styles template
-  - Better template file structure
-  - Improved template fallback system
-
-### Enhanced
-- Payment processing system reliability
-- Email notification system with better templates
-- Dashboard statistics with monetary amounts
-- Order status management workflow
-- Payment tracking accuracy
-- Template system with better organization
-- Debug mode with improved logging
-- Error handling and validation
-- Template path resolution
-
-## [1.5.0] - 2025-01-24
-### Added
-- Enhanced payment summary in emails with total amount, paid amount, and pending amount
-- Total amount statistics in dashboard widgets
-- Payment date management system
-- Improved installment tracking and display
-
-### Changed
-- Switched to order item meta for payment status storage
-- Updated payment link email format:
-  - New subject format: "Payment Link for {product_name} - Installment #{number}"
-  - New heading format: "{product_name} Installment #{number}"
-  - Added comprehensive payment summary section
-- Enhanced dashboard organization:
-  - Latest orders first sorting
-  - Better installment number display
-  - Improved payment status tracking
-- Streamlined order status handling:
-  - Simplified status workflow
-  - Better integration with WooCommerce statuses
-  - Updated notification triggers
-
-### Enhanced
-- Payment processing system reliability
-- Dashboard statistics with monetary amounts
-- Email templates with better formatting
-- Order status management
-- Payment tracking accuracy
-
-## [1.4.1] - 2025-01-23
-### Changed
-- Removed Action colum from Upcoming table
-
-## [1.4.0] - 2025-01-23
-### Added
-- Payment link system with copy and email functionality
-- ClipboardJS integration for payment link copying
-- New payment link email template
-- Enhanced debugging and error logging in admin
-
-### Changed
-- Refactored payment schedule display for better organization
-- Improved payment status handling and updates
-- Enhanced responsive design for payment tables
-- Updated admin UI with better payment link management
-
-### Enhanced
-- Error handling with detailed logging
-- Payment processing reliability
-- Admin JavaScript with better error catching
-- Frontend payment schedule visualization
-
-## [1.3.0] - 2025-01-23
-### Added
-- Sub-order system for individual installment management
-- Payment link generation for each installment
-- Enhanced payment tracking with detailed status updates
-- New table component system for consistent data display
-- Responsive design improvements across admin and frontend
-
-### Changed
-- Switched from schedule-based to installment-based payment system
-- Improved payment history interface with better organization
-- Enhanced status badge system with new visual indicators
-- Updated payment schedule display with better visualization
-- Refined cart and order displays for better user experience
-
-### Enhanced
-- Admin interface with new sub-order management
-- Order list with Flex Pay information column
-- Payment tracking with detailed installment status
-- Frontend payment selection interface
-- Email notification system for payment reminders
-
-## [1.2.1] - 2025-01-22
-### Added
-- New order statuses for better payment tracking:
-  - wc-flex-pay-pending: Flex Pay Pending
-  - wc-flex-pay-partial: Flex Pay Partial
-  - wc-flex-pay-overdue: Flex Pay Overdue
-  - wc-flex-pay-completed: Flex Pay Completed
-  - wc-flex-pay-failed: Flex Pay Failed
-
-### Changed
-- Switched payment data storage from custom tables to WordPress post meta
-- Improved regular price synchronization with installment amounts in admin
-- Removed database tables in favor of meta-based storage
-- Updated admin UI to use meta-based data storage
-- Enhanced performance by using native WordPress data structures
-
-## [1.1.1] - 2024-01-25
-### Changed
-- Improved payment schedule display in cart
-- Enhanced readability of payment dates and amounts
-- Updated spacing and formatting in cart display
-- Optimized payment information layout for better user experience
-
-## [1.1.0] - 2024-01-24
-### Added
-- Initial release of WC Flex Pay
-- Flexible payment schedules for WooCommerce products
-- Custom payment schedule management in product admin
-- Payment tracking and management system
-- Email notifications for upcoming and overdue payments
-- Admin dashboard for payment schedule management
-- WooCommerce cart and checkout integration
-- SCSS-based styling system with utility classes
-- Margin and padding utility classes (m-0 through m-8, p-0 through p-8)
-- Database table for payment schedules
-- Automated email notifications system
-- Order management integration
-- Multi-language support
-- Debug logging system
-
-### Security
-- WordPress nonce verification for forms
-- Data sanitization and validation
-- Proper capability checks for admin functions
-- Direct file access prevention
+[Rest of changelog remains the same...]

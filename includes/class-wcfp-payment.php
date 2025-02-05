@@ -268,9 +268,28 @@ class Payment {
                 throw new \Exception(__('Invalid order.', 'wc-flex-pay'));
             }
 
+            // Check if user is logged in
+            if (!is_user_logged_in()) {
+                // Add notice to inform user
+                wc_add_notice(__('Please log in to access your payment link.', 'wc-flex-pay'), 'notice');
+                
+                // Build the return URL
+                $return_url = add_query_arg(array(
+                    'wcfp-pay' => $order_id,
+                    'installment' => $installment_number,
+                    'token' => $token
+                ), wc_get_page_permalink('myaccount'));
+                
+                // Redirect to login page with return URL
+                wp_redirect(add_query_arg('redirect', urlencode($return_url), wc_get_page_permalink('myaccount')));
+                exit;
+            }
+
             // Verify customer
             if ($parent_order->get_customer_id() !== get_current_user_id() && !current_user_can('manage_woocommerce')) {
-                throw new \Exception(__('Unauthorized access.', 'wc-flex-pay'));
+                wc_add_notice(__('You do not have permission to access this payment link.', 'wc-flex-pay'), 'error');
+                wp_redirect(wc_get_page_permalink('myaccount'));
+                exit;
             }
 
             // Validate payment link if token provided
@@ -622,22 +641,47 @@ class Payment {
             // Process payment
             $result = $gateway->process_payment($order->get_id());
 
-            if ($result['result'] === 'success') {
-                $this->update_payment_status($payment_id, 'completed');
-                $this->log_event($order->get_id(), __('Payment processed successfully.', 'wc-flex-pay'), 'payment');
-                
-                // Store transaction details
-                $this->update_payment_details($order->get_id(), $payment_id, array(
-                    'transaction_id' => $order->get_transaction_id(),
-                    'payment_method' => $payment_method,
-                    'payment_date' => current_time('mysql')
-                ));
-                
-                // Check if all payments are completed
-                if ($this->are_all_payments_completed($order->get_id())) {
-                    $order->update_status('completed', __('All Flex Pay payments completed.', 'wc-flex-pay'));
-                    $this->log_event($order->get_id(), __('All installments completed.', 'wc-flex-pay'), 'system');
-                }
+                if ($result['result'] === 'success') {
+                    $this->update_payment_status($payment_id, 'completed');
+                    $this->log_event($order->get_id(), __('Payment processed successfully.', 'wc-flex-pay'), 'payment');
+                    
+                    // Store transaction details
+                    $payment_details = array(
+                        'transaction_id' => $order->get_transaction_id(),
+                        'payment_method' => $payment_method,
+                        'payment_date' => current_time('mysql')
+                    );
+                    $this->update_payment_details($order->get_id(), $payment_id, $payment_details);
+                    
+                    // Send payment complete email
+                    Emails::instance()->send_payment_complete(
+                        $order->get_id(),
+                        $payment_id,
+                        array_merge($payment_details, array(
+                            'total_amount' => $order->get_total(),
+                            'paid_amount' => $order->get_total(),
+                            'pending_amount' => 0
+                        ))
+                    );
+
+                    // Send order details email if this is the first payment
+                    if ($payment_id === 1) {
+                        Emails::instance()->send_order_details(
+                            $order->get_id(),
+                            $payment_id,
+                            array(
+                                'total_amount' => $order->get_total(),
+                                'paid_amount' => $order->get_total(),
+                                'pending_amount' => 0
+                            )
+                        );
+                    }
+                    
+                    // Check if all payments are completed
+                    if ($this->are_all_payments_completed($order->get_id())) {
+                        $order->update_status('completed', __('All Flex Pay payments completed.', 'wc-flex-pay'));
+                        $this->log_event($order->get_id(), __('All installments completed.', 'wc-flex-pay'), 'system');
+                    }
             } else {
                 throw new \Exception($result['messages'] ?? __('Payment processing failed.', 'wc-flex-pay'));
             }

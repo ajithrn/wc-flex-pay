@@ -741,7 +741,27 @@ class Notification {
      * @return bool
      */
     private function is_notification_enabled($type) {
-        return 'yes' === get_option('wcfp_enable_' . $type . '_notifications', 'yes');
+        // For admin notifications, check if they're enabled globally first
+        if (strpos($type, 'admin_') === 0) {
+            if (!get_option('wcfp_admin_notifications', 'yes')) {
+                return false;
+            }
+        }
+
+        // For admin notifications, check if the specific event is enabled
+        if (strpos($type, 'admin_') === 0) {
+            $events = get_option('wcfp_admin_notification_events', array('payment_failed', 'payment_overdue'));
+            $event_type = str_replace('admin_', '', $type);
+            return in_array('payment_' . $event_type, $events);
+        }
+
+        // For customer notifications, check if they're enabled and the specific event is selected
+        if (get_option('wcfp_enable_customer_notifications', 'yes') === 'yes') {
+            $events = get_option('wcfp_customer_notification_events', array('payment_complete', 'payment_reminder', 'payment_overdue'));
+            return in_array('payment_' . $type, $events);
+        }
+
+        return false;
     }
 
     /**
@@ -836,6 +856,154 @@ class Notification {
             } catch (\Exception $e) {
                 $this->log_error($e->getMessage(), array('order_id' => $order_id));
             }
+        }
+    }
+
+    /**
+     * Notify admin about payment failure
+     *
+     * @param int $order_id Order ID
+     */
+    public function notify_admin_payment_failed($order_id) {
+        if (!$this->is_notification_enabled('admin_failed')) {
+            return;
+        }
+
+        $order = wc_get_order($order_id);
+        if (!$order || !$this->is_flex_pay_order($order)) {
+            return;
+        }
+
+        $admin_email = $this->get_admin_email();
+        if (empty($admin_email)) {
+            return;
+        }
+
+        try {
+            // Get payment details
+            $payment_details = '';
+            foreach ($order->get_items() as $item) {
+                if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                    $payment_status = $item->get_meta('_wcfp_payment_status');
+                    if (!empty($payment_status)) {
+                        foreach ($payment_status as $status) {
+                            if ($status['status'] === 'failed') {
+                                $payment_details .= sprintf(
+                                    "\n- Installment #%d: %s (Due: %s)",
+                                    $status['number'],
+                                    wc_price($status['amount']),
+                                    date_i18n(get_option('date_format'), strtotime($status['due_date']))
+                                );
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+
+            // Send admin notification
+            $subject = sprintf(
+                '[%s] Flex Pay Payment Failed - Order #%s',
+                get_bloginfo('name'),
+                $order->get_order_number()
+            );
+
+            $message = sprintf(
+                "A Flex Pay payment has failed for order #%s\n\n" .
+                "Customer: %s %s (%s)\n" .
+                "Order Total: %s\n" .
+                "Failed Payments:%s\n\n" .
+                "View Order: %s",
+                $order->get_order_number(),
+                $order->get_billing_first_name(),
+                $order->get_billing_last_name(),
+                $order->get_billing_email(),
+                $order->get_formatted_order_total(),
+                $payment_details,
+                admin_url('post.php?post=' . $order->get_id() . '&action=edit')
+            );
+
+            wp_mail($admin_email, $subject, $message);
+            $this->log_notification('admin_failed_sent', $order_id);
+        } catch (\Exception $e) {
+            $this->log_error($e->getMessage(), array('order_id' => $order_id));
+        }
+    }
+
+    /**
+     * Notify admin about payment overdue
+     *
+     * @param int $order_id Order ID
+     */
+    public function notify_admin_payment_overdue($order_id) {
+        if (!$this->is_notification_enabled('admin_overdue')) {
+            return;
+        }
+
+        $order = wc_get_order($order_id);
+        if (!$order || !$this->is_flex_pay_order($order)) {
+            return;
+        }
+
+        $admin_email = $this->get_admin_email();
+        if (empty($admin_email)) {
+            return;
+        }
+
+        try {
+            // Get overdue payments
+            $overdue_details = '';
+            foreach ($order->get_items() as $item) {
+                if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                    $payment_status = $item->get_meta('_wcfp_payment_status');
+                    if (!empty($payment_status)) {
+                        foreach ($payment_status as $status) {
+                            if ($status['status'] === 'pending' && strtotime($status['due_date']) < current_time('timestamp')) {
+                                $days_overdue = floor((current_time('timestamp') - strtotime($status['due_date'])) / DAY_IN_SECONDS);
+                                $overdue_details .= sprintf(
+                                    "\n- Installment #%d: %s (Due: %s, %d days overdue)",
+                                    $status['number'],
+                                    wc_price($status['amount']),
+                                    date_i18n(get_option('date_format'), strtotime($status['due_date'])),
+                                    $days_overdue
+                                );
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+
+            if (empty($overdue_details)) {
+                return;
+            }
+
+            // Send admin notification
+            $subject = sprintf(
+                '[%s] Flex Pay Payment Overdue - Order #%s',
+                get_bloginfo('name'),
+                $order->get_order_number()
+            );
+
+            $message = sprintf(
+                "A Flex Pay payment is overdue for order #%s\n\n" .
+                "Customer: %s %s (%s)\n" .
+                "Order Total: %s\n" .
+                "Overdue Payments:%s\n\n" .
+                "View Order: %s",
+                $order->get_order_number(),
+                $order->get_billing_first_name(),
+                $order->get_billing_last_name(),
+                $order->get_billing_email(),
+                $order->get_formatted_order_total(),
+                $overdue_details,
+                admin_url('post.php?post=' . $order->get_id() . '&action=edit')
+            );
+
+            wp_mail($admin_email, $subject, $message);
+            $this->log_notification('admin_overdue_sent', $order_id);
+        } catch (\Exception $e) {
+            $this->log_error($e->getMessage(), array('order_id' => $order_id));
         }
     }
 

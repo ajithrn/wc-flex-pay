@@ -53,7 +53,7 @@ foreach ($order->get_items() as $item) {
 }
 ?>
 
-<div class="wcfp-failed-notice" style="margin-bottom: 20px; padding: 15px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; color: #721c24;">
+<div class="wcfp-error-notice" style="margin-bottom: 20px; padding: 15px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; color: #721c24;">
     <?php
     printf(
         /* translators: %1$s: customer first name, %2$s: order number */
@@ -64,17 +64,22 @@ foreach ($order->get_items() as $item) {
     ?>
 </div>
 
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
+    <h3 class="wcfp-heading"><?php esc_html_e('Payment Summary', 'wc-flex-pay'); ?></h3>
+    <?php include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php'; ?>
+</div>
+
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
+    <h3 class="wcfp-heading"><?php esc_html_e('Order Details', 'wc-flex-pay'); ?></h3>
+    <?php include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php'; ?>
+</div>
+
 <?php
-// Include payment summary
-include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php';
-
-// Include order details
-include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php';
-
 // Add retry payment notice
 if (!empty($link_data['url'])) : ?>
-    <div class="wcfp-retry-notice" style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; color: #856404;">
-        <?php esc_html_e('Please use the button below to try the payment again:', 'wc-flex-pay'); ?>
+    <div class="wcfp-installment-details">
+        <h3 class="wcfp-heading"><?php esc_html_e('Retry Payment', 'wc-flex-pay'); ?></h3>
+        <p><?php esc_html_e('Please use the button below to try the payment again:', 'wc-flex-pay'); ?></p>
     </div>
 
     <?php

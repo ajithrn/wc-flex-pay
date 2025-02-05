@@ -26,6 +26,17 @@ if (!defined('ABSPATH')) {
         margin: 0 0 20px;
     }
 
+    .wcfp-subheading {
+        color: #8d0759;
+        font-size: 18px;
+        font-weight: bold;
+        margin: 20px 0 15px;
+    }
+
+    .wcfp-subheading:first-child {
+        margin-top: 0;
+    }
+
     .wcfp-summary-box {
         background-color: #f9e6f2;
         border-radius: 4px;

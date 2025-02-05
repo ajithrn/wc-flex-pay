@@ -294,12 +294,17 @@ class Order {
                             $installment_data['payment_date'] = $status['payment_date'];
                             $installment_data['transaction_id'] = $status['transaction_id'];
                             
-                            // Get sub order ID from payments meta if available
-                            $payments = get_post_meta($order->get_id(), '_wcfp_payments', true) ?: array();
-                            if (!empty($payments['installments'][$status['number'] - 1]['sub_order_id'])) {
-                                $installment_data['sub_order_id'] = $payments['installments'][$status['number'] - 1]['sub_order_id'];
+                            // Get sub order ID from payment status or payments meta
+                            if (!empty($status['sub_order_id'])) {
+                                $installment_data['sub_order_id'] = $status['sub_order_id'];
+                            } else {
+                                // Fallback to payments meta
+                                $payments = get_post_meta($order->get_id(), '_wcfp_payments', true) ?: array();
+                                if (!empty($payments['installments'][$status['number'] - 1]['sub_order_id'])) {
+                                    $installment_data['sub_order_id'] = $payments['installments'][$status['number'] - 1]['sub_order_id'];
+                                }
                             }
-                            
+
                             $completed_payments[] = $installment_data;
                         }
                     }
@@ -514,15 +519,58 @@ class Order {
             // Map sub-order status to parent order status
             $parent_status = $this->get_parent_order_status($new_status);
             if ($parent_status) {
-                $parent_order->update_status(
-                    $parent_status,
-                    sprintf(
-                        /* translators: 1: sub-order number, 2: status */
-                        __('Sub-order #%1$s status changed to %2$s', 'wc-flex-pay'),
-                        $order->get_order_number(),
-                        wc_get_order_status_name($new_status)
-                    )
-                );
+                // Check if all sub-orders are completed before updating parent
+                if ($new_status === 'completed') {
+                    $all_completed = true;
+                    $sub_orders = wc_get_orders(array(
+                        'meta_key' => '_wcfp_parent_order',
+                        'meta_value' => $parent_order_id,
+                        'return' => 'ids'
+                    ));
+
+                    foreach ($sub_orders as $sub_order_id) {
+                        if ($sub_order_id != $order_id) {  // Skip current order as it's already completed
+                            $sub_order = wc_get_order($sub_order_id);
+                            if ($sub_order && $sub_order->get_status() !== 'completed') {
+                                $all_completed = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Only update parent to completed if all sub-orders are completed
+                    if ($all_completed) {
+                        $parent_order->update_status(
+                            $parent_status,
+                            sprintf(
+                                /* translators: 1: sub-order number, 2: status */
+                                __('Sub-order #%1$s status changed to %2$s - All installments completed', 'wc-flex-pay'),
+                                $order->get_order_number(),
+                                wc_get_order_status_name($new_status)
+                            )
+                        );
+                    } else {
+                        $parent_order->update_status(
+                            'flex-pay-partial',
+                            sprintf(
+                                /* translators: 1: sub-order number, 2: status */
+                                __('Sub-order #%1$s status changed to %2$s - Some installments pending', 'wc-flex-pay'),
+                                $order->get_order_number(),
+                                wc_get_order_status_name($new_status)
+                            )
+                        );
+                    }
+                } else {
+                    $parent_order->update_status(
+                        $parent_status,
+                        sprintf(
+                            /* translators: 1: sub-order number, 2: status */
+                            __('Sub-order #%1$s status changed to %2$s', 'wc-flex-pay'),
+                            $order->get_order_number(),
+                            wc_get_order_status_name($new_status)
+                        )
+                    );
+                }
             }
         }
     }
@@ -607,8 +655,16 @@ class Order {
                             $payment_status[$installment_number - 1]['status'] = 'completed';
                             $payment_status[$installment_number - 1]['payment_date'] = current_time('Y-m-d');
                             $payment_status[$installment_number - 1]['transaction_id'] = $order->get_transaction_id();
+                            $payment_status[$installment_number - 1]['sub_order_id'] = $order_id;
                             $item->update_meta_data('_wcfp_payment_status', $payment_status);
                             $item->save();
+
+                            // Also update the payment in parent order meta
+                            $parent_payments = get_post_meta($parent_order_id, '_wcfp_payments', true) ?: array();
+                            if (!empty($parent_payments['installments'][$installment_number - 1])) {
+                                $parent_payments['installments'][$installment_number - 1]['sub_order_id'] = $order_id;
+                                update_post_meta($parent_order_id, '_wcfp_payments', $parent_payments);
+                            }
                             break;
                         }
                     }
@@ -626,6 +682,56 @@ class Order {
                     ),
                     'payment'
                 );
+
+                // Get all completed payments for email
+                $completed_payments = array();
+                foreach ($payments['installments'] as $installment) {
+                    if ($installment['status'] === 'completed') {
+                        $completed_payments[] = array(
+                            'amount' => $installment['amount'],
+                            'transaction_id' => $installment['transaction_id'],
+                            'payment_date' => $installment['payment_date'],
+                            'installment_number' => $installment['number'],
+                            'sub_order_id' => $installment['sub_order_id'] ?? null
+                        );
+                    }
+                }
+
+                // Send payment complete email with detailed sub-order info
+                Emails::instance()->send_payment_complete(
+                    $parent_order_id,
+                    $installment_number,
+                    array(
+                        'total_amount' => $total_amount,
+                        'paid_amount' => $paid_amount,
+                        'pending_amount' => $total_amount - $paid_amount,
+                        'current_installment' => $payments['installments'][$installment_number - 1],
+                        'sub_order_id' => $order_id,
+                        'current_payment' => array(
+                            'amount' => $order->get_total(),
+                            'transaction_id' => $order->get_transaction_id(),
+                            'payment_method' => $order->get_payment_method_title(),
+                            'date' => $order->get_date_paid() ? $order->get_date_paid()->date_i18n(get_option('date_format')) : null,
+                            'sub_order_id' => $order_id,
+                            'installment_number' => $installment_number
+                        ),
+                        'completed_payments' => $completed_payments
+                    )
+                );
+
+                // Send order details email for first installment
+                if ($installment_number === 1) {
+                    Emails::instance()->send_order_details(
+                        $parent_order_id,
+                        $installment_number,
+                        array(
+                            'total_amount' => $total_amount,
+                            'paid_amount' => $paid_amount,
+                            'pending_amount' => $total_amount - $paid_amount,
+                            'payment_schedule' => $payments['installments']
+                        )
+                    );
+                }
 
                 // Update payment link status if exists
                 $links = get_post_meta($parent_order_id, '_wcfp_payment_links', true) ?: array();
@@ -748,6 +854,52 @@ class Order {
             update_post_meta($order_id, '_wcfp_initial_payment_transaction_id', $transaction_id);
             update_post_meta($order_id, '_wcfp_initial_payment_installments', $updated_installments);
 
+            // Calculate payment data for email
+            $payment_data = array();
+            foreach ($payment_status as $status) {
+                if ($status['status'] === 'completed') {
+                    $payment_data[] = array(
+                        'amount' => $status['amount'],
+                        'transaction_id' => $status['transaction_id'],
+                        'payment_date' => $status['payment_date'],
+                        'installment_number' => $status['number']
+                    );
+                }
+            }
+
+            // Send payment complete email with detailed payment info
+            Emails::instance()->send_payment_complete(
+                $order_id,
+                $updated_installments[0],
+                array(
+                    'total_amount' => $total_amount,
+                    'paid_amount' => $total_amount,
+                    'pending_amount' => 0,
+                    'transaction_id' => $transaction_id,
+                    'current_payment' => array(
+                        'amount' => $payment_status[$updated_installments[0] - 1]['amount'],
+                        'transaction_id' => $transaction_id,
+                        'payment_method' => $order->get_payment_method_title(),
+                        'date' => current_time('Y-m-d'),
+                        'installment_number' => $updated_installments[0]
+                    ),
+                    'completed_payments' => $payment_data
+                )
+            );
+
+            // Send order details email for first installment
+            if (in_array(1, $updated_installments)) {
+                Emails::instance()->send_order_details(
+                    $order_id,
+                    1,
+                    array(
+                        'total_amount' => $total_amount,
+                        'paid_amount' => $total_amount,
+                        'pending_amount' => 0
+                    )
+                );
+            }
+
             // Check if payment completion affects order status
             $this->check_payment_completion($order_id, '', '');
         }
@@ -769,13 +921,18 @@ class Order {
                 return;
             }
 
+        // Initialize counters
         $all_completed = true;
         $total_installments = 0;
         $completed_installments = 0;
+        $has_flex_pay = false;
 
+        // Check each order item
         foreach ($order->get_items() as $item) {
             if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                $has_flex_pay = true;
                 $payment_status = $item->get_meta('_wcfp_payment_status');
+                
                 if (!empty($payment_status)) {
                     foreach ($payment_status as $status) {
                         $total_installments++;
@@ -789,8 +946,85 @@ class Order {
             }
         }
 
-        if ($all_completed) {
+        // If this isn't a flex pay order, don't proceed
+        if (!$has_flex_pay) {
+            return;
+        }
+
+        // Check if this is a parent order with sub-orders
+        $is_parent_order = false;
+        $sub_orders_query = wc_get_orders(array(
+            'meta_key' => '_wcfp_parent_order',
+            'meta_value' => $order_id,
+            'return' => 'ids'
+        ));
+
+        if (!empty($sub_orders_query)) {
+            $is_parent_order = true;
+            // For parent orders, verify all sub-orders are completed
+            foreach ($sub_orders_query as $sub_order_id) {
+                $sub_order = wc_get_order($sub_order_id);
+                if ($sub_order && $sub_order->get_status() !== 'completed') {
+                    $all_completed = false;
+                    break;
+                }
+            }
+        }
+
+        if ($all_completed && $completed_installments === $total_installments) {
+            // Update status to completed
             $order->update_status('completed', __('All Flex Pay installments completed.', 'wc-flex-pay'));
+            
+            // Calculate final totals and get completed payments
+            $total_amount = 0;
+            $completed_payments = array();
+            
+            foreach ($order->get_items() as $item) {
+                if ('yes' === $item->get_meta('_wcfp_enabled') && 'installment' === $item->get_meta('_wcfp_payment_type')) {
+                    $payment_status = $item->get_meta('_wcfp_payment_status');
+                    if (!empty($payment_status)) {
+                        foreach ($payment_status as $status) {
+                            $amount = $status['amount'] * $item->get_quantity();
+                            $total_amount += $amount;
+                            $completed_payments[] = array_merge($status, array(
+                                'amount' => $amount
+                            ));
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // Sort completed payments by number
+            usort($completed_payments, function($a, $b) {
+                return $a['number'] - $b['number'];
+            });
+            
+            // Send final order details email
+            Emails::instance()->send_order_details(
+                $order_id,
+                count($completed_payments), // Last installment number
+                array(
+                    'total_amount' => $total_amount,
+                    'paid_amount' => $total_amount,
+                    'pending_amount' => 0,
+                    'is_final' => true,
+                    'completed_payments' => $completed_payments
+                )
+            );
+            
+            // Add completion note
+            $this->add_order_note_with_icon(
+                $order,
+                sprintf(
+                    /* translators: 1: total installments, 2: total amount */
+                    __('All %1$d installments completed. Total amount paid: %2$s', 'wc-flex-pay'),
+                    count($completed_payments),
+                    wc_price($total_amount)
+                ),
+                'success'
+            );
+            
         } elseif ($completed_installments > 0) {
             $order->update_status('flex-pay-partial', sprintf(
                 /* translators: 1: completed installments, 2: total installments */

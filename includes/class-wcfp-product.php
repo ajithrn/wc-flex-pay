@@ -567,7 +567,7 @@ class Product {
      * Display installment notice at checkout
      */
     public function display_checkout_installment_notice() {
-        $this->display_cart_installment_notice();
+        //$this->display_cart_installment_notice();
     }
 
     /**

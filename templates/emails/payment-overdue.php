@@ -53,7 +53,7 @@ foreach ($order->get_items() as $item) {
 }
 ?>
 
-<div class="wcfp-overdue-notice" style="margin-bottom: 20px; padding: 15px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; color: #721c24;">
+<div class="wcfp-error-notice" style="margin-bottom: 20px; padding: 15px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; color: #721c24;">
     <?php
     printf(
         /* translators: %1$s: customer first name, %2$s: order number */
@@ -64,13 +64,17 @@ foreach ($order->get_items() as $item) {
     ?>
 </div>
 
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
+    <h3 class="wcfp-heading"><?php esc_html_e('Payment Summary', 'wc-flex-pay'); ?></h3>
+    <?php include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php'; ?>
+</div>
+
+<div class="wcfp-summary-box" style="margin-bottom: 30px;">
+    <h3 class="wcfp-heading"><?php esc_html_e('Order Details', 'wc-flex-pay'); ?></h3>
+    <?php include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php'; ?>
+</div>
+
 <?php
-// Include payment summary
-include WCFP_PLUGIN_DIR . 'templates/emails/partials/payment-summary.php';
-
-// Include order details
-include WCFP_PLUGIN_DIR . 'templates/emails/partials/order-details.php';
-
 // Prepare action buttons
 $actions = array(
     'pay' => array(
@@ -85,7 +89,8 @@ include WCFP_PLUGIN_DIR . 'templates/emails/partials/action-buttons.php';
 
 // Add extended expiry notice
 if (!empty($payment_data['expiry_date'])) : ?>
-    <div class="wcfp-expiry-notice" style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; color: #856404;">
+    <div class="wcfp-installment-details">
+        <h3 class="wcfp-heading"><?php esc_html_e('Payment Link Expiry', 'wc-flex-pay'); ?></h3>
         <?php
         printf(
             /* translators: %s: expiry date */
