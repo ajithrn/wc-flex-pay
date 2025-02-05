@@ -33,7 +33,7 @@ class Payment_Overdue extends Email_Base {
      * @return string
      */
     public function get_default_subject() {
-        return __('Payment Overdue for {product_name}: Installment #{installment_number}', 'wc-flex-pay');
+        return __('Payment Overdue: Order #{order_number} - Installment #{installment_number}', 'wc-flex-pay');
     }
 
     /**
@@ -42,7 +42,7 @@ class Payment_Overdue extends Email_Base {
      * @return string
      */
     public function get_default_heading() {
-        return __('{product_name}: Installment #{installment_number} Payment Overdue', 'wc-flex-pay');
+        return __('Payment Overdue: Order #{order_number} - Installment #{installment_number}', 'wc-flex-pay');
     }
 
     /**

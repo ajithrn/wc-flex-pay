@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.10] - 2025-02-06
+### Enhanced
+- Email templates with standardized subject lines and headings:
+  - Added order number to all email subjects for better tracking
+  - Consistent format across all notification types
+  - Simplified payment summary template for better readability
+
 ## [1.6.9] - 2025-02-05
 ### Fixed
 - Email notifications for flex pay orders:

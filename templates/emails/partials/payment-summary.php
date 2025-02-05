@@ -34,60 +34,7 @@ $payment_data = array_merge(
 ?>
 
 <div class="wcfp-summary-box">
-    <?php if (!empty($payment_data['current_payment'])) : ?>
-        <h4 class="wcfp-subheading"><?php esc_html_e('Current Payment', 'wc-flex-pay'); ?></h4>
-        <table class="wcfp-summary-table">
-            <?php if (!empty($payment_data['current_installment'])) : ?>
-            <tr>
-                <th><?php esc_html_e('Installment:', 'wc-flex-pay'); ?></th>
-                <td class="amount">
-                    <?php 
-                    printf(
-                        /* translators: %d: installment number */
-                        esc_html__('#%d', 'wc-flex-pay'),
-                        $payment_data['current_installment']['number']
-                    ); 
-                    ?>
-                </td>
-            </tr>
-            <?php endif; ?>
-            <tr>
-                <th><?php esc_html_e('Amount:', 'wc-flex-pay'); ?></th>
-                <td class="amount"><?php echo wc_price(floatval($payment_data['current_payment']['amount'])); ?></td>
-            </tr>
-            <?php if (!empty($payment_data['sub_order_id'])) : ?>
-            <tr>
-                <th><?php esc_html_e('Sub Order:', 'wc-flex-pay'); ?></th>
-                <td class="amount">
-                    <?php 
-                    $sub_order = wc_get_order($payment_data['sub_order_id']);
-                    echo esc_html('#' . $sub_order->get_order_number());
-                    ?>
-                </td>
-            </tr>
-            <?php endif; ?>
-            <?php if (!empty($payment_data['current_payment']['transaction_id'])) : ?>
-            <tr>
-                <th><?php esc_html_e('Transaction ID:', 'wc-flex-pay'); ?></th>
-                <td class="amount"><?php echo esc_html($payment_data['current_payment']['transaction_id']); ?></td>
-            </tr>
-            <?php endif; ?>
-            <?php if (!empty($payment_data['current_payment']['payment_method'])) : ?>
-            <tr>
-                <th><?php esc_html_e('Payment Method:', 'wc-flex-pay'); ?></th>
-                <td class="amount"><?php echo esc_html($payment_data['current_payment']['payment_method']); ?></td>
-            </tr>
-            <?php endif; ?>
-            <?php if (!empty($payment_data['current_payment']['date'])) : ?>
-            <tr>
-                <th><?php esc_html_e('Payment Date:', 'wc-flex-pay'); ?></th>
-                <td class="amount"><?php echo esc_html($payment_data['current_payment']['date']); ?></td>
-            </tr>
-            <?php endif; ?>
-        </table>
-    <?php endif; ?>
 
-    <h4 class="wcfp-subheading"><?php esc_html_e('Overall Progress', 'wc-flex-pay'); ?></h4>
     <table class="wcfp-summary-table">
         <?php
         // Get product name from order items
@@ -137,53 +84,4 @@ $payment_data = array_merge(
     ?>
     </table>
 
-    <?php if (!empty($payment_data['completed_payments'])) : ?>
-        <h4 class="wcfp-subheading"><?php esc_html_e('Payment History', 'wc-flex-pay'); ?></h4>
-        <table class="wcfp-summary-table">
-            <?php foreach ($payment_data['completed_payments'] as $payment) : ?>
-                <tr>
-                    <td colspan="2" style="padding-top: 10px; border-top: 1px solid #dee2e6;">
-                        <strong>
-                            <?php 
-                            printf(
-                                /* translators: %d: installment number */
-                                esc_html__('Installment #%d', 'wc-flex-pay'),
-                                $payment['installment_number']
-                            ); 
-                            ?>
-                        </strong>
-                    </td>
-                </tr>
-                <tr>
-                    <th><?php esc_html_e('Amount:', 'wc-flex-pay'); ?></th>
-                    <td class="amount"><?php echo wc_price(floatval($payment['amount'])); ?></td>
-                </tr>
-                <?php if (!empty($payment['transaction_id'])) : ?>
-                <tr>
-                    <th><?php esc_html_e('Transaction ID:', 'wc-flex-pay'); ?></th>
-                    <td class="amount"><?php echo esc_html($payment['transaction_id']); ?></td>
-                </tr>
-                <?php endif; ?>
-                <?php if (!empty($payment['payment_date'])) : ?>
-                <tr>
-                    <th><?php esc_html_e('Payment Date:', 'wc-flex-pay'); ?></th>
-                    <td class="amount"><?php echo esc_html($payment['payment_date']); ?></td>
-                </tr>
-                <?php endif; ?>
-                <?php if (!empty($payment['sub_order_id'])) : ?>
-                <tr>
-                    <th><?php esc_html_e('Sub Order:', 'wc-flex-pay'); ?></th>
-                    <td class="amount">
-                        <?php 
-                        $sub_order = wc_get_order($payment['sub_order_id']);
-                        if ($sub_order) {
-                            echo esc_html('#' . $sub_order->get_order_number());
-                        }
-                        ?>
-                    </td>
-                </tr>
-                <?php endif; ?>
-            <?php endforeach; ?>
-        </table>
-    <?php endif; ?>
 </div>

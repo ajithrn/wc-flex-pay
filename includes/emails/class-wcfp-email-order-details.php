@@ -42,7 +42,7 @@ class Order_Details extends Email_Base {
      * @return string
      */
     public function get_default_subject() {
-        return __('Your {site_title} Flex Pay order details', 'wc-flex-pay');
+        return __('Order Details: Order #{order_number}', 'wc-flex-pay');
     }
 
     /**
@@ -51,7 +51,7 @@ class Order_Details extends Email_Base {
      * @return string
      */
     public function get_default_heading() {
-        return __('Flex Pay Order Details', 'wc-flex-pay');
+        return __('Order Details: Order #{order_number}', 'wc-flex-pay');
     }
 
     /**

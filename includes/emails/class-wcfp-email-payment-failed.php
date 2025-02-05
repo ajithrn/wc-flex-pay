@@ -33,7 +33,7 @@ class Payment_Failed extends Email_Base {
      * @return string
      */
     public function get_default_subject() {
-        return __('Payment Failed for {product_name}: Installment #{installment_number}', 'wc-flex-pay');
+        return __('Payment Failed: Order #{order_number} - Installment #{installment_number}', 'wc-flex-pay');
     }
 
     /**
@@ -42,7 +42,7 @@ class Payment_Failed extends Email_Base {
      * @return string
      */
     public function get_default_heading() {
-        return __('{product_name}: Installment #{installment_number} Payment Failed', 'wc-flex-pay');
+        return __('Payment Failed: Order #{order_number} - Installment #{installment_number}', 'wc-flex-pay');
     }
 
     /**

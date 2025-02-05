@@ -40,7 +40,7 @@ class Payment_Link extends Email_Base {
      * @return string
      */
     public function get_default_subject() {
-        return __('Your Payment Link for {product_name}: Installment #{installment_number}', 'wc-flex-pay');
+        return __('Payment Link: Order #{order_number} - Installment #{installment_number}', 'wc-flex-pay');
     }
 
     /**
@@ -49,7 +49,7 @@ class Payment_Link extends Email_Base {
      * @return string
      */
     public function get_default_heading() {
-        return __('{product_name}: Installment #{installment_number}', 'wc-flex-pay');
+        return __('Payment Link: Order #{order_number} - Installment #{installment_number}', 'wc-flex-pay');
     }
 
     /**
