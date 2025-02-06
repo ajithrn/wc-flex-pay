@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.7.0] - 2025-02-06
+### Changed
+- Major refactoring of email and notification system:
+  - Split monolithic classes into focused service classes
+  - Added dedicated handlers for payment events and order actions
+  - Improved code organization with proper namespacing
+  - Enhanced payment link management
+  - Better email styling system with consistent components
+  - Centralized email template handling
+  - Improved error handling and logging
+
 ## [1.6.10] - 2025-02-06
 ### Enhanced
 - Email templates with standardized subject lines and headings:

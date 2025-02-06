@@ -206,17 +206,6 @@ usort($installments['completed'], function($a, $b) {
 // Show next payment notice if there are pending payments
 if ($payment_data['pending_amount'] > 0 && !empty($installments['upcoming'])) : ?>
     <div class="wcfp-divider"></div>
-    <div class="wcfp-installment-details">
-        <?php
-        $next_payment = reset($installments['upcoming']);
-        printf(
-            /* translators: 1: formatted amount, 2: formatted date */
-            esc_html__('Your next payment of %1$s is due on %2$s. You\'ll receive a payment reminder email before the due date.', 'wc-flex-pay'),
-            wc_price($next_payment['amount']),
-            date_i18n(get_option('date_format'), strtotime($next_payment['due_date']))
-        );
-        ?>
-    </div>
 <?php endif; ?>
 
 <?php

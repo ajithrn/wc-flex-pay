@@ -152,13 +152,6 @@ if ($payment_data['pending_amount'] > 0 && !empty($installments['upcoming'])) {
     esc_html_e('Next Payment', 'wc-flex-pay');
     echo "\n=================\n\n";
 
-    $next_payment = reset($installments['upcoming']);
-    printf(
-        /* translators: 1: formatted amount, 2: formatted date */
-        esc_html__('Your next payment of %1$s is due on %2$s. You\'ll receive a payment reminder email before the due date.', 'wc-flex-pay') . "\n\n",
-        wc_price($next_payment['amount']),
-        date_i18n(get_option('date_format'), strtotime($next_payment['due_date']))
-    );
 }
 
 // Additional content

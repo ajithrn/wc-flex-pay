@@ -11,7 +11,7 @@
  * Plugin Name: WC Flex Pay
  * Plugin URI:  https://kwirx.com/wc-flex-pay
  * Description: Enable selling products with scheduled partial payments in WooCommerce
- * Version:     1.6.10
+ * Version:     1.7.0
  * Author:      Ajith R N
  * Author URI:  https://kwirx.com
  * Text Domain: wc-flex-pay
@@ -37,7 +37,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants.
-define('WCFP_VERSION', '1.6.10');
+define('WCFP_VERSION', '1.7.0');
 define('WCFP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WCFP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WCFP_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -95,6 +95,21 @@ spl_autoload_register(function($class) {
     
     // Get the relative class name
     $relative_class = substr($class, $len);
+    
+    // Map namespaces to directories
+    $namespace_map = array(
+        'Services\\' => 'services/',
+        'Handlers\\' => 'handlers/'
+    );
+    
+    // Check if class is in a mapped namespace
+    foreach ($namespace_map as $namespace => $dir) {
+        if (strpos($relative_class, $namespace) === 0) {
+            $relative_class = substr($relative_class, strlen($namespace));
+            $base_dir .= $dir;
+            break;
+        }
+    }
     
     // Replace namespace separators with directory separators
     $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
@@ -170,18 +185,28 @@ final class WC_Flex_Pay {
      * Initialize plugin components
      */
     private function init_components() {
-        // Load and initialize core components
+        // Load core components
         require_once WCFP_PLUGIN_DIR . 'includes/class-wcfp-product.php';
         require_once WCFP_PLUGIN_DIR . 'includes/class-wcfp-order.php';
         require_once WCFP_PLUGIN_DIR . 'includes/class-wcfp-payment.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/class-wcfp-notification.php';
-        require_once WCFP_PLUGIN_DIR . 'includes/class-wcfp-emails.php';
+        
+        // Load services (order matters due to dependencies)
+        require_once WCFP_PLUGIN_DIR . 'includes/services/class-wcfp-style-manager.php';
+        require_once WCFP_PLUGIN_DIR . 'includes/services/class-wcfp-payment-link-manager.php';
+        require_once WCFP_PLUGIN_DIR . 'includes/services/class-wcfp-email-manager.php';
+        require_once WCFP_PLUGIN_DIR . 'includes/services/class-wcfp-notification-manager.php';
+        
+        // Load handlers
+        require_once WCFP_PLUGIN_DIR . 'includes/handlers/class-wcfp-payment-event-handler.php';
+        require_once WCFP_PLUGIN_DIR . 'includes/handlers/class-wcfp-order-action-handler.php';
 
         // Initialize core components
         new \WCFP\Product();
         new \WCFP\Order();
-        new \WCFP\Notification();
-        new \WCFP\Emails();
+        
+        // Initialize handlers
+        new \WCFP\Handlers\Payment_Event_Handler();
+        new \WCFP\Handlers\Order_Action_Handler();
 
         // Add template include filter
         add_filter('woocommerce_locate_template', array($this, 'locate_template'), 20, 3);

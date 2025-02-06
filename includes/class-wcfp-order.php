@@ -233,6 +233,10 @@ class Order {
 
             // Set order status to pending
             $order->update_status('pending', __('Order has pending Flex Pay installments.', 'wc-flex-pay'));
+
+            // Store payment schedule and total amount in order meta for later use
+            update_post_meta($order_id, '_wcfp_future_payments', $future_payments);
+            update_post_meta($order_id, '_wcfp_total_pending', $total_pending);
         }
     }
 
@@ -697,41 +701,31 @@ class Order {
                     }
                 }
 
-                // Send payment complete email with detailed sub-order info
-                Emails::instance()->send_payment_complete(
-                    $parent_order_id,
-                    $installment_number,
-                    array(
-                        'total_amount' => $total_amount,
-                        'paid_amount' => $paid_amount,
-                        'pending_amount' => $total_amount - $paid_amount,
-                        'current_installment' => $payments['installments'][$installment_number - 1],
-                        'sub_order_id' => $order_id,
-                        'current_payment' => array(
-                            'amount' => $order->get_total(),
-                            'transaction_id' => $order->get_transaction_id(),
-                            'payment_method' => $order->get_payment_method_title(),
-                            'date' => $order->get_date_paid() ? $order->get_date_paid()->date_i18n(get_option('date_format')) : null,
-                            'sub_order_id' => $order_id,
-                            'installment_number' => $installment_number
-                        ),
-                        'completed_payments' => $completed_payments
-                    )
-                );
-
-                // Send order details email for first installment
-                if ($installment_number === 1) {
-                    Emails::instance()->send_order_details(
+                // Send payment complete email for sub-orders (except first installment)
+                if (!empty($status['is_initial_payment'])) {
+                    \WCFP\Services\Email_Manager::instance()->send_email(
+                        \WCFP\Services\Email_Manager::PAYMENT_COMPLETE,
                         $parent_order_id,
                         $installment_number,
                         array(
                             'total_amount' => $total_amount,
                             'paid_amount' => $paid_amount,
                             'pending_amount' => $total_amount - $paid_amount,
-                            'payment_schedule' => $payments['installments']
+                            'current_installment' => $payments['installments'][$installment_number - 1],
+                            'sub_order_id' => $order_id,
+                            'current_payment' => array(
+                                'amount' => $order->get_total(),
+                                'transaction_id' => $order->get_transaction_id(),
+                                'payment_method' => $order->get_payment_method_title(),
+                                'date' => $order->get_date_paid() ? $order->get_date_paid()->date_i18n(get_option('date_format')) : null,
+                                'sub_order_id' => $order_id,
+                                'installment_number' => $installment_number
+                            ),
+                            'completed_payments' => $completed_payments
                         )
                     );
                 }
+
 
                 // Update payment link status if exists
                 $links = get_post_meta($parent_order_id, '_wcfp_payment_links', true) ?: array();
@@ -854,51 +848,27 @@ class Order {
             update_post_meta($order_id, '_wcfp_initial_payment_transaction_id', $transaction_id);
             update_post_meta($order_id, '_wcfp_initial_payment_installments', $updated_installments);
 
-            // Calculate payment data for email
-            $payment_data = array();
-            foreach ($payment_status as $status) {
-                if ($status['status'] === 'completed') {
-                    $payment_data[] = array(
-                        'amount' => $status['amount'],
-                        'transaction_id' => $status['transaction_id'],
-                        'payment_date' => $status['payment_date'],
-                        'installment_number' => $status['number']
-                    );
-                }
-            }
-
-            // Send payment complete email with detailed payment info
-            Emails::instance()->send_payment_complete(
-                $order_id,
-                $updated_installments[0],
-                array(
-                    'total_amount' => $total_amount,
-                    'paid_amount' => $total_amount,
-                    'pending_amount' => 0,
-                    'transaction_id' => $transaction_id,
-                    'current_payment' => array(
-                        'amount' => $payment_status[$updated_installments[0] - 1]['amount'],
-                        'transaction_id' => $transaction_id,
-                        'payment_method' => $order->get_payment_method_title(),
-                        'date' => current_time('Y-m-d'),
-                        'installment_number' => $updated_installments[0]
-                    ),
-                    'completed_payments' => $payment_data
-                )
-            );
-
-            // Send order details email for first installment
-            if (in_array(1, $updated_installments)) {
-                Emails::instance()->send_order_details(
-                    $order_id,
-                    1,
-                    array(
-                        'total_amount' => $total_amount,
-                        'paid_amount' => $total_amount,
-                        'pending_amount' => 0
-                    )
-                );
-            }
+            // // Send order details email only after initial payment is confirmed
+            // if (in_array(1, $updated_installments)) {
+            //     $total_pending = get_post_meta($order_id, '_wcfp_total_pending', true) ?: 0;
+            //     $future_payments = get_post_meta($order_id, '_wcfp_future_payments', true);
+                
+            //     // Only send if this is the first time we're sending the email
+            //     if (!get_post_meta($order_id, '_wcfp_order_details_sent', true)) {
+            //         \WCFP\Services\Email_Manager::instance()->send_email(
+            //             \WCFP\Services\Email_Manager::ORDER_DETAILS,
+            //             $order_id,
+            //             1,
+            //             array(
+            //                 'total_amount' => $total_amount + $total_pending,
+            //                 'paid_amount' => $total_amount,
+            //                 'pending_amount' => $total_pending,
+            //                 'payment_schedule' => $future_payments
+            //             )
+            //         );
+            //         update_post_meta($order_id, '_wcfp_order_details_sent', true);
+            //     }
+            // }
 
             // Check if payment completion affects order status
             $this->check_payment_completion($order_id, '', '');
@@ -1000,18 +970,6 @@ class Order {
                 return $a['number'] - $b['number'];
             });
             
-            // Send final order details email
-            Emails::instance()->send_order_details(
-                $order_id,
-                count($completed_payments), // Last installment number
-                array(
-                    'total_amount' => $total_amount,
-                    'paid_amount' => $total_amount,
-                    'pending_amount' => 0,
-                    'is_final' => true,
-                    'completed_payments' => $completed_payments
-                )
-            );
             
             // Add completion note
             $this->add_order_note_with_icon(
